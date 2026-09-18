@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -136,6 +137,28 @@ function PlaceholderImage({ src, className }: { src: string; className?: string 
     <div className={cx("image-ph", className)} role="img" aria-label={`Future image placeholder for ${src}`}>
       <span>{src}</span>
     </div>
+  );
+}
+
+function OptimisedImage({
+  src,
+  alt,
+  className,
+  priority = false,
+  sizes = "(max-width: 768px) 100vw, 50vw",
+  position
+}: {
+  src: string;
+  alt: string;
+  className?: string;
+  priority?: boolean;
+  sizes?: string;
+  position?: string;
+}) {
+  return (
+    <figure className={cx("real-image", className)}>
+      <Image src={src} alt={alt} fill priority={priority} sizes={sizes} className={position ? `object-${position}` : undefined} />
+    </figure>
   );
 }
 
@@ -699,7 +722,14 @@ function Home({ onAdd, verification }: { onAdd: (product: BullionProduct) => voi
             </PrimaryButton>
           </div>
         </div>
-        <PlaceholderImage src="/images/home/bullion-hero.jpg" className="hero-image" />
+        <OptimisedImage
+          src="/images/home/bullion-hero.webp"
+          alt="Premium gold bullion bars arranged on a luxury stone surface"
+          className="hero-image"
+          priority
+          sizes="(max-width: 900px) 100vw, 58vw"
+          position="right"
+        />
       </section>
       <section className="section">
         <SectionHead eyebrow="Featured bullion" title="Live-priced gold bars" action={<Link href="/bullion">Browse all</Link>} />
@@ -709,6 +739,29 @@ function Home({ onAdd, verification }: { onAdd: (product: BullionProduct) => voi
             .map((product) => (
               <ProductCard key={product.id} product={product} onAdd={onAdd} verification={verification} />
             ))}
+        </div>
+      </section>
+      <section className="section category-section">
+        <SectionHead eyebrow="Featured bullion categories" title="Choose the format that fits your portfolio" action={<Link href="/bullion">View bullion</Link>} />
+        <div className="category-grid">
+          <CategoryCard
+            image="/images/home/minted-bars.webp"
+            alt="Minted gold bars and assay packaging on a luxury stone surface"
+            title="Minted Bars"
+            body="Refined presentation, precise weights and a polished finish for customers who value packaging and provenance."
+          />
+          <CategoryCard
+            image="/images/home/cast-bars.webp"
+            alt="Cast gold bullion bars in multiple weights on a premium stone surface"
+            title="Cast Bars"
+            body="Substantial investment-grade bars with tactile texture and efficient larger-weight purchasing options."
+          />
+          <CategoryCard
+            image="/images/home/branded-bullion.webp"
+            alt="Premium branded gold bullion bars displayed with green presentation packaging"
+            title="Branded Bullion"
+            body="Recognised bullion presentation from Iconic and selected global refineries, with clear purity and weight details."
+          />
         </div>
       </section>
       <section className="feature-band">
@@ -729,7 +782,12 @@ function Home({ onAdd, verification }: { onAdd: (product: BullionProduct) => voi
         </div>
       </section>
       <section className="split-section">
-        <PlaceholderImage src="/images/home/iconic-bullion-feature.jpg" />
+        <OptimisedImage
+          src="/images/home/iconic-bullion-feature.webp"
+          alt="Iconic Bullion gold bar with serial verification presentation"
+          className="own-brand-image"
+          sizes="(max-width: 900px) 100vw, 48vw"
+        />
         <div>
           <span className="eyebrow">Own-brand bullion</span>
           <h2>Certificate-ready Iconic bars</h2>
@@ -742,9 +800,24 @@ function Home({ onAdd, verification }: { onAdd: (product: BullionProduct) => voi
       <section className="section">
         <SectionHead eyebrow="Service model" title="Pickup, insured delivery and wholesale support" />
         <div className="three">
-          <MiniCard image="/images/home/secure-delivery.jpg" title="Store pickup" body="Free pickup with identification reminder and order status updates." />
-          <MiniCard image="/images/home/verification-trust.jpg" title="Insured delivery" body="A configurable delivery fee is isolated for a future courier integration." />
-          <MiniCard image="/images/home/wholesale.jpg" title="Wholesale enquiries" body="Business customers can enquire about availability, weights and trade supply." />
+          <MiniCard
+            image="/images/home/secure-delivery.webp"
+            imageAlt="Gold bullion prepared in secure premium packaging"
+            title="Pickup & insured delivery"
+            body="Free store pickup is available, with insured delivery represented by a configurable fulfilment fee."
+          />
+          <MiniCard
+            image="/images/home/verification-trust.webp"
+            imageAlt="Gold bullion bar displayed with authenticity certificate"
+            title="Authenticity verification"
+            body="Iconic-branded bullion can be checked by serial number with certificate-ready authenticity details."
+          />
+          <MiniCard
+            image="/images/home/wholesale.webp"
+            imageAlt="Multiple gold bullion bars prepared for wholesale supply"
+            title="Wholesale enquiries"
+            body="Business customers can enquire about availability, weights and trade supply."
+          />
         </div>
       </section>
     </>
@@ -763,10 +836,22 @@ function SectionHead({ eyebrow, title, action }: { eyebrow: string; title: strin
   );
 }
 
-function MiniCard({ image, title, body }: { image: string; title: string; body: string }) {
+function CategoryCard({ image, alt, title, body }: { image: string; alt: string; title: string; body: string }) {
+  return (
+    <Link href="/bullion" className="category-card">
+      <OptimisedImage src={image} alt={alt} sizes="(max-width: 900px) 100vw, 33vw" />
+      <div>
+        <h3>{title}</h3>
+        <p>{body}</p>
+      </div>
+    </Link>
+  );
+}
+
+function MiniCard({ image, imageAlt, title, body }: { image: string; imageAlt?: string; title: string; body: string }) {
   return (
     <article className="mini-card">
-      <PlaceholderImage src={image} />
+      {image.endsWith(".webp") ? <OptimisedImage src={image} alt={imageAlt || title} sizes="(max-width: 900px) 100vw, 33vw" /> : <PlaceholderImage src={image} />}
       <h3>{title}</h3>
       <p>{body}</p>
     </article>
@@ -1660,7 +1745,12 @@ function AboutPage() {
       <div className="three">
         <MiniCard image="/images/about/bullion-expertise.jpg" title="Bullion expertise" body="Readable product information, margins and market references." />
         <MiniCard image="/images/about/wholesale-heritage.jpg" title="Wholesale heritage" body="A dedicated enquiry path for business customers." />
-        <MiniCard image="/images/home/verification-trust.jpg" title="Security and trust" body="Verification, invoices and fulfilment statuses are foregrounded." />
+        <MiniCard
+          image="/images/home/verification-trust.webp"
+          imageAlt="Gold bullion bar displayed with authenticity certificate"
+          title="Security and trust"
+          body="Verification, invoices and fulfilment statuses are foregrounded."
+        />
       </div>
     </section>
   );

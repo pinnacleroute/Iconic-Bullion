@@ -284,6 +284,33 @@ p {
   min-height: 540px;
 }
 
+.real-image {
+  width: 100%;
+  min-height: 210px;
+  position: relative;
+  overflow: hidden;
+  margin: 0;
+  background: var(--paper);
+  border: 1px solid var(--border);
+}
+
+.real-image img {
+  object-fit: cover;
+  transition: transform 220ms ease;
+}
+
+.real-image .object-right {
+  object-position: center right;
+}
+
+.real-image .object-left {
+  object-position: center left;
+}
+
+.real-image .object-center {
+  object-position: center;
+}
+
 .image-ph {
   width: 100%;
   min-height: 210px;
@@ -514,6 +541,49 @@ p {
   font-size: 1.55rem;
 }
 
+.category-section {
+  padding-top: 12px;
+}
+
+.category-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.category-card {
+  min-width: 0;
+  display: grid;
+  background: var(--paper);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  transition: transform 160ms ease, border-color 160ms ease;
+}
+
+.category-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(16, 61, 50, 0.35);
+}
+
+.category-card .real-image {
+  aspect-ratio: 4 / 3;
+  min-height: 0;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.category-card:hover .real-image img,
+.mini-card:hover .real-image img,
+.split-section:hover .own-brand-image img {
+  transform: scale(1.02);
+}
+
+.category-card > div {
+  display: grid;
+  gap: 10px;
+  padding: 22px;
+}
+
 .split-section {
   display: grid;
   grid-template-columns: 0.95fr 1.05fr;
@@ -521,7 +591,7 @@ p {
   align-items: center;
 }
 
-.split-section > div:not(.image-ph) {
+.split-section > div:not(.image-ph):not(.real-image) {
   display: grid;
   gap: 18px;
 }
@@ -542,6 +612,17 @@ p {
 
 .mini-card .image-ph {
   min-height: 170px;
+}
+
+.mini-card .real-image {
+  aspect-ratio: 4 / 3;
+  min-height: 0;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.own-brand-image {
+  min-height: 500px;
 }
 
 .catalogue {
@@ -1084,8 +1165,16 @@ th {
     min-height: 380px;
   }
 
+  .own-brand-image {
+    min-height: 420px;
+  }
+
   .product-grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .category-grid {
+    grid-template-columns: 1fr;
   }
 
   .catalogue {
@@ -1148,6 +1237,7 @@ th {
   }
 
   .product-grid,
+  .category-grid,
   .choice-grid,
   .choice-grid.small,
   .spec-grid,
@@ -1181,6 +1271,10 @@ th {
   .hero-image,
   .main-product-image {
     min-height: 300px;
+  }
+
+  .own-brand-image {
+    min-height: 320px;
   }
 
   .thumbs {
