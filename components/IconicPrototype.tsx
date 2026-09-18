@@ -381,7 +381,8 @@ function ProductCard({
   verification,
   compact,
   showcase = false,
-  displayPrice
+  displayPrice,
+  market = marketSnapshot
 }: {
   product: BullionProduct;
   onAdd: (product: BullionProduct) => void;
@@ -389,8 +390,9 @@ function ProductCard({
   compact?: boolean;
   showcase?: boolean;
   displayPrice?: string;
+  market?: typeof marketSnapshot;
 }) {
-  const price = calculateProductBullionPrice(product, marketSnapshot);
+  const price = calculateProductBullionPrice(product, market);
   const disabled = product.availability === "Out of Stock" || product.availability === "Coming Soon";
   return (
     <article className={cx("product-card", compact && "compact", showcase && "showcase")}>
@@ -404,6 +406,8 @@ function ProductCard({
         <p>
           {product.weightLabel} · {product.purity}
         </p>
+        {!showcase && <span className="live-price-label">Live Price</span>}
+        {product.iconicSerialEligible && !showcase && <span className="serial-note">Serial verification</span>}
         <div className="price-row">
           <strong>{displayPrice || formatAUD(price)}</strong>
           <StatusPill tone={product.availability === "In Stock" ? "green" : product.availability === "Low Stock" ? "gold" : "neutral"}>
@@ -550,6 +554,9 @@ export function IconicPrototype({ route }: { route: string }) {
   const [market, setMarket] = useState(marketSnapshot);
   const [query, setQuery] = useState("");
   const [brand, setBrand] = useState("All");
+  const [productType, setProductType] = useState("All");
+  const [weight, setWeight] = useState("All");
+  const [availability, setAvailability] = useState("All");
   const [sort, setSort] = useState("Featured");
   const [serial, setSerial] = useState("IB-10G-000219");
   const [secondsLeft, setSecondsLeft] = useState(600);
@@ -606,14 +613,27 @@ export function IconicPrototype({ route }: { route: string }) {
     const lower = query.toLowerCase();
     let result = products.filter((product) => {
       const brandMatch = brand === "All" || product.brand === brand;
+      const typeMatch = productType === "All" || product.type === productType;
+      const weightMatch = weight === "All" || product.weightLabel === weight;
+      const availabilityMatch = availability === "All" || product.availability === availability;
       const queryMatch = !query || `${product.brand} ${product.name} ${product.weightLabel}`.toLowerCase().includes(lower);
-      return brandMatch && queryMatch;
+      return brandMatch && typeMatch && weightMatch && availabilityMatch && queryMatch;
     });
+    if (sort === "Featured") {
+      result = result.sort((a, b) => {
+        const featured = Number(Boolean(b.featured)) - Number(Boolean(a.featured));
+        if (featured) return featured;
+        const iconic = Number(b.brand === "Iconic Bullion") - Number(a.brand === "Iconic Bullion");
+        if (iconic) return iconic;
+        return a.weightGrams - b.weightGrams;
+      });
+    }
     if (sort === "Price Low to High") result = result.sort((a, b) => calculateProductBullionPrice(a, market) - calculateProductBullionPrice(b, market));
     if (sort === "Price High to Low") result = result.sort((a, b) => calculateProductBullionPrice(b, market) - calculateProductBullionPrice(a, market));
-    if (sort === "Weight") result = result.sort((a, b) => a.weightGrams - b.weightGrams);
+    if (sort === "Weight Low to High") result = result.sort((a, b) => a.weightGrams - b.weightGrams);
+    if (sort === "Weight High to Low") result = result.sort((a, b) => b.weightGrams - a.weightGrams);
     return result;
-  }, [brand, market, query, sort]);
+  }, [availability, brand, market, productType, query, sort, weight]);
 
   function addToCart(product: BullionProduct) {
     if (verification !== "approved") {
@@ -650,8 +670,15 @@ export function IconicPrototype({ route }: { route: string }) {
             setQuery={setQuery}
             brand={brand}
             setBrand={setBrand}
+            productType={productType}
+            setProductType={setProductType}
+            weight={weight}
+            setWeight={setWeight}
+            availability={availability}
+            setAvailability={setAvailability}
             sort={sort}
             setSort={setSort}
+            market={market}
             onAdd={addToCart}
             verification={verification}
           />
@@ -1040,8 +1067,15 @@ function Listing({
   setQuery,
   brand,
   setBrand,
+  productType,
+  setProductType,
+  weight,
+  setWeight,
+  availability,
+  setAvailability,
   sort,
   setSort,
+  market,
   onAdd,
   verification
 }: {
@@ -1050,14 +1084,33 @@ function Listing({
   setQuery: (query: string) => void;
   brand: string;
   setBrand: (brand: string) => void;
+  productType: string;
+  setProductType: (type: string) => void;
+  weight: string;
+  setWeight: (weight: string) => void;
+  availability: string;
+  setAvailability: (availability: string) => void;
   sort: string;
   setSort: (sort: string) => void;
+  market: typeof marketSnapshot;
   onAdd: (product: BullionProduct) => void;
   verification: VerificationState;
 }) {
+  const brandOptions = ["All", "Iconic Bullion", "Aurelia Reserve", "PAMP Suisse", "Emirates Gold", "Generic", "ABC / Placeholder Brand"];
+  const weightOptions = ["All", "1g", "2.5g", "5g", "10g", "20g", "1oz / 31.1g", "50g", "100g", "250g", "500g", "1kg"];
+
   return (
     <section className="page-shell">
-      <SectionHead eyebrow="Bullion" title="Browse live-priced gold bullion" />
+      <SectionHead
+        eyebrow="Investment Gold"
+        title="Bullion"
+        subtitle="Explore investment-grade gold bars across trusted brands, formats and weights, with pricing linked to the live gold market."
+      />
+      <div className="listing-categories">
+        <CategoryCard image="/images/home/minted-bars.webp" alt="Iconic Bullion minted gold bars" title="Minted Bars" body="Refined presentation bars." to="bullion" />
+        <CategoryCard image="/images/home/cast-bars.webp" alt="Iconic Bullion cast gold bars" title="Cast Bars" body="Substantial investment weights." to="bullion" />
+        <CategoryCard image="/images/home/branded-bullion.webp" alt="Iconic Bullion branded bullion products" title="Branded Bullion" body="Own-brand and trusted products." to="bullion" />
+      </div>
       <div className="catalogue">
         <aside className="filters">
           <h2>
@@ -1065,19 +1118,19 @@ function Listing({
           </h2>
           <label>
             Search
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search products" />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search bullion products" />
           </label>
           <label>
             Brand
             <select value={brand} onChange={(event) => setBrand(event.target.value)}>
-              {["All", "Iconic Bullion", "Aurelia Reserve", "PAMP Suisse", "Emirates Gold", "Generic", "ABC / Placeholder Brand"].map((option) => (
+              {brandOptions.map((option) => (
                 <option key={option}>{option}</option>
               ))}
             </select>
           </label>
           <label>
             Type
-            <select>
+            <select value={productType} onChange={(event) => setProductType(event.target.value)}>
               <option>All</option>
               <option>Minted Bars</option>
               <option>Cast Bars</option>
@@ -1085,13 +1138,18 @@ function Listing({
           </label>
           <label>
             Weight
-            <select>
-              <option>All</option>
-              <option>1g</option>
-              <option>5g</option>
-              <option>10g</option>
-              <option>1oz / 31.1g</option>
-              <option>1kg</option>
+            <select value={weight} onChange={(event) => setWeight(event.target.value)}>
+              {weightOptions.map((option) => (
+                <option key={option}>{option}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Availability
+            <select value={availability} onChange={(event) => setAvailability(event.target.value)}>
+              {["All", "In Stock", "Low Stock", "Out of Stock", "Coming Soon"].map((option) => (
+                <option key={option}>{option}</option>
+              ))}
             </select>
           </label>
           <PrimaryButton
@@ -1099,6 +1157,9 @@ function Listing({
             onClick={() => {
               setQuery("");
               setBrand("All");
+              setProductType("All");
+              setWeight("All");
+              setAvailability("All");
             }}
           >
             Reset Filters
@@ -1106,9 +1167,9 @@ function Listing({
         </aside>
         <div>
           <div className="toolbar">
-            <span>{products.length} products</span>
+            <span>{products.length} bullion products</span>
             <select value={sort} onChange={(event) => setSort(event.target.value)} aria-label="Sort products">
-              {["Featured", "Price Low to High", "Price High to Low", "Weight"].map((option) => (
+              {["Featured", "Price Low to High", "Price High to Low", "Weight Low to High", "Weight High to Low"].map((option) => (
                 <option key={option}>{option}</option>
               ))}
             </select>
@@ -1116,7 +1177,7 @@ function Listing({
           {products.length ? (
             <div className="product-grid">
               {products.map((product) => (
-                <ProductCard key={product.id} product={product} onAdd={onAdd} verification={verification} />
+                <ProductCard key={product.id} product={product} market={market} onAdd={onAdd} verification={verification} />
               ))}
             </div>
           ) : (

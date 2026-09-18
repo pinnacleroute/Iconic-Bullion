@@ -859,11 +859,16 @@ p {
 }
 
 .product-card .product-media {
-  aspect-ratio: 1 / 1;
+  aspect-ratio: 4 / 3;
   min-height: 0;
   border: 0;
   border-bottom: 1px solid var(--border);
   background: #f8f2e7;
+}
+
+.product-card .product-media img {
+  object-fit: contain;
+  object-position: center;
 }
 
 .product-card.showcase .product-copy {
@@ -902,6 +907,15 @@ p {
   vertical-align: 1px;
 }
 
+.serial-note {
+  width: fit-content;
+  color: var(--green);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .product-card.showcase .price-row {
   margin-top: 12px;
 }
@@ -938,6 +952,21 @@ p {
 .iconic-brand-section {
   padding-top: 120px;
   padding-bottom: 120px;
+}
+
+.listing-categories {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2px;
+}
+
+.listing-categories .category-card .real-image {
+  aspect-ratio: 16 / 6.4;
+}
+
+.listing-categories .category-card > div {
+  padding: 48px 24px 22px;
 }
 
 .bar-size-image,
