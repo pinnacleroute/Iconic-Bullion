@@ -3,7 +3,7 @@ export type Availability = "In Stock" | "Low Stock" | "Out of Stock" | "Coming S
 
 export type BullionProduct = {
   id: string;
-  brand: "Iconic Bullion" | "PAMP Suisse" | "Emirates Gold" | "ABC / Placeholder Brand" | "Generic";
+  brand: "Iconic Bullion" | "PAMP Suisse" | "Emirates Gold" | "ABC / Placeholder Brand" | "Aurelia Reserve" | "Generic";
   name: string;
   weightGrams: number;
   weightLabel: string;
@@ -44,8 +44,8 @@ export const products: BullionProduct[] = [
     marginPercent: 9,
     stock: 64,
     availability: "In Stock",
-    image: "/images/products/iconic-1g-front.jpg",
-    gallery: ["/images/products/iconic-1g-front.jpg", "/images/products/iconic-1g-back.jpg"],
+    image: "/images/products/iconic-1g.webp",
+    gallery: ["/images/products/iconic-1g.webp"],
     iconicSerialEligible: true,
     featured: true
   },
@@ -60,8 +60,8 @@ export const products: BullionProduct[] = [
     marginPercent: 10,
     stock: 28,
     availability: "In Stock",
-    image: "/images/products/iconic-5g-front.jpg",
-    gallery: ["/images/products/iconic-5g-front.jpg", "/images/products/iconic-1g-back.jpg"],
+    image: "/images/products/iconic-5g.webp",
+    gallery: ["/images/products/iconic-5g.webp"],
     iconicSerialEligible: true,
     featured: true
   },
@@ -76,9 +76,24 @@ export const products: BullionProduct[] = [
     marginPercent: 9.5,
     stock: 12,
     availability: "Low Stock",
-    image: "/images/products/iconic-10g-front.jpg",
-    gallery: ["/images/products/iconic-10g-front.jpg", "/images/serial/iconic-bar-serial.jpg"],
+    image: "/images/products/iconic-10g.webp",
+    gallery: ["/images/products/iconic-10g.webp", "/images/serial/iconic-bar-serial.jpg"],
     iconicSerialEligible: true,
+    featured: true
+  },
+  {
+    id: "premium-1g",
+    brand: "Aurelia Reserve",
+    name: "1g Minted Gold Bar",
+    weightGrams: 1,
+    weightLabel: "1g",
+    purity: "999.9 Fine Gold",
+    type: "Minted Bars",
+    marginPercent: 8.4,
+    stock: 36,
+    availability: "In Stock",
+    image: "/images/products/premium-1g.webp",
+    gallery: ["/images/products/premium-1g.webp"],
     featured: true
   },
   {
@@ -94,7 +109,7 @@ export const products: BullionProduct[] = [
     availability: "In Stock",
     image: "/images/products/pamp-1g-front.jpg",
     gallery: ["/images/products/pamp-1g-front.jpg", "/images/products/pamp-1g-back.jpg"],
-    featured: true
+    featured: false
   },
   {
     id: "pamp-5g",

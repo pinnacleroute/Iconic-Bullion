@@ -162,6 +162,13 @@ function OptimisedImage({
   );
 }
 
+function ProductMedia({ src, alt, className }: { src: string; alt: string; className?: string }) {
+  if (src.endsWith(".webp")) {
+    return <OptimisedImage src={src} alt={alt} className={cx("product-media", className)} sizes="(max-width: 720px) 100vw, 25vw" />;
+  }
+  return <PlaceholderImage src={src} className={className} />;
+}
+
 function StatusPill({ children, tone = "neutral" }: { children: React.ReactNode; tone?: "green" | "gold" | "red" | "neutral" }) {
   return <span className={`status-pill ${tone}`}>{children}</span>;
 }
@@ -263,10 +270,8 @@ function Header({
     <header className="site-header">
       <div className="topbar">
         <Link className="brand" href="/">
-          <span className="brand-mark">IB</span>
-          <span>
-            <strong>Iconic Bullion</strong>
-            <small>Premium Australian bullion</small>
+          <span className="brand-logo">
+            <Image src="/images/home/brand-logo.webp" alt="Iconic Bullion" fill sizes="150px" />
           </span>
         </Link>
         <nav className="desktop-nav" aria-label="Primary">
@@ -309,13 +314,33 @@ function Header({
 }
 
 function Footer() {
-  const links = [
-    ["FAQ", "faq"],
-    ["Terms", "terms"],
-    ["Privacy", "privacy"],
-    ["Delivery", "delivery-policy"],
-    ["Refunds", "refund-policy"],
-    ["Bullion Trading & KYC", "bullion-trading-policy"]
+  const groups = [
+    {
+      title: "Shop",
+      links: [
+        ["Bullion", "bullion"],
+        ["Live Gold Price", "market"],
+        ["Wholesale", "wholesale"],
+        ["Serial Verification", "serial-verification"]
+      ]
+    },
+    {
+      title: "Support",
+      links: [
+        ["FAQ", "faq"],
+        ["Contact", "contact"],
+        ["Delivery", "delivery-policy"],
+        ["Refunds", "refund-policy"]
+      ]
+    },
+    {
+      title: "Legal",
+      links: [
+        ["Terms", "terms"],
+        ["Privacy", "privacy"],
+        ["Bullion Trading & KYC", "bullion-trading-policy"]
+      ]
+    }
   ];
   return (
     <footer className="footer">
@@ -323,13 +348,18 @@ function Footer() {
         <strong>Iconic Bullion</strong>
         <p>Secure bullion purchasing, clear live pricing, bank-transfer ordering and professional account verification.</p>
       </div>
-      <nav>
-        {links.map(([label, route]) => (
-          <Link key={route} href={href(route)}>
-            {label}
-          </Link>
+      <div className="footer-groups">
+        {groups.map((group) => (
+          <nav key={group.title} aria-label={group.title}>
+            <span>{group.title}</span>
+            {group.links.map(([label, route]) => (
+              <Link key={route} href={href(route)}>
+                {label}
+              </Link>
+            ))}
+          </nav>
         ))}
-      </nav>
+      </div>
     </footer>
   );
 }
@@ -350,7 +380,7 @@ function ProductCard({
   return (
     <article className={cx("product-card", compact && "compact")}>
       <Link href={`/product?id=${product.id}`} aria-label={`View ${product.brand} ${product.name}`}>
-        <PlaceholderImage src={product.image} />
+        <ProductMedia src={product.image} alt={`${product.brand} ${product.name}`} />
       </Link>
       <div className="product-copy">
         <span className="eyebrow">{product.brand}</span>
@@ -708,18 +738,47 @@ export function IconicPrototype({ route }: { route: string }) {
 }
 
 function Home({ onAdd, verification }: { onAdd: (product: BullionProduct) => void; verification: VerificationState }) {
+  const featuredProducts = products.filter((p) => p.featured).slice(0, 4);
+  const sizeLabels = ["1g", "2.5g", "5g", "10g", "20g", "1oz", "50g", "100g", "250g", "500g", "1kg"];
+  const pricingSteps = [
+    ["Live Gold Market", "Spot price, refreshed every 5 min"],
+    ["Product Margin", "Format, weight and premium applied"],
+    ["Your Live Price", "Transparent, in real time"]
+  ];
+  const trustItems = [
+    ["Identity verification before trading", "Customer verification before bullion transactions."],
+    ["Authenticity verification", "Selected Iconic Bullion bars include unique serial identification."],
+    ["Secure customer account", "Your account, order history and invoices in one place."],
+    ["Transparent order records", "Clear invoices and order records for every transaction."]
+  ];
+  const whyItems = [
+    ["Live Pricing", "Prices linked to mock market movements, refreshed on the shared pricing cycle."],
+    ["Secure Verification", "Customer verification before trading and serial controls for selected Iconic bullion."],
+    ["Bank Transfer", "Clear invoice-based settlement with no card or wallet checkout in this prototype."],
+    ["Pickup or Delivery", "Free store pickup or insured delivery represented by configurable fulfilment."]
+  ];
+
   return (
     <>
-      <section className="hero">
+      <section className="figma-hero">
         <div className="hero-copy">
-          <span className="eyebrow">Bullion only · Australian prototype</span>
-          <h1>Secure Bullion. Transparent Pricing.</h1>
-          <p>Browse gold bullion with live mock market pricing, account verification, 10-minute cart price locks, bank-transfer invoices and public serial verification for Iconic-branded bars.</p>
+          <span className="eyebrow gold">Australian Precious Metals</span>
+          <h1>
+            Gold.
+            <br />
+            <em>Refined.</em>
+          </h1>
+          <p>Buy investment-grade gold bullion with transparent live pricing, secure verification and flexible pickup or insured delivery.</p>
           <div className="split-actions">
-            <PrimaryButton href="bullion">View Bullion</PrimaryButton>
+            <PrimaryButton href="bullion">Shop Bullion</PrimaryButton>
             <PrimaryButton href="market" variant="secondary">
-              Live Gold Price
+              View Live Gold Price
             </PrimaryButton>
+          </div>
+          <div className="trust-line">
+            <span>Live pricing</span>
+            <span>Secure verification</span>
+            <span>Bank transfer</span>
           </div>
         </div>
         <OptimisedImage
@@ -731,96 +790,188 @@ function Home({ onAdd, verification }: { onAdd: (product: BullionProduct) => voi
           position="right"
         />
       </section>
-      <section className="section">
-        <SectionHead eyebrow="Featured bullion" title="Live-priced gold bars" action={<Link href="/bullion">Browse all</Link>} />
-        <div className="product-grid">
-          {products
-            .filter((p) => p.featured)
-            .map((product) => (
-              <ProductCard key={product.id} product={product} onAdd={onAdd} verification={verification} />
-            ))}
-        </div>
-      </section>
       <section className="section category-section">
-        <SectionHead eyebrow="Featured bullion categories" title="Choose the format that fits your portfolio" action={<Link href="/bullion">View bullion</Link>} />
+        <SectionHead eyebrow="Explore Bullion" title="Investment-grade gold across formats" action={<Link href="/bullion">View all</Link>} />
         <div className="category-grid">
           <CategoryCard
             image="/images/home/minted-bars.webp"
             alt="Minted gold bars and assay packaging on a luxury stone surface"
             title="Minted Bars"
-            body="Refined presentation, precise weights and a polished finish for customers who value packaging and provenance."
+            body="Precision-finished investment gold"
+            to="bullion?type=minted"
           />
           <CategoryCard
             image="/images/home/cast-bars.webp"
             alt="Cast gold bullion bars in multiple weights on a premium stone surface"
             title="Cast Bars"
-            body="Substantial investment-grade bars with tactile texture and efficient larger-weight purchasing options."
+            body="Traditional bullion with substantial weight"
+            to="bullion?type=cast"
           />
           <CategoryCard
             image="/images/home/branded-bullion.webp"
             alt="Premium branded gold bullion bars displayed with green presentation packaging"
             title="Branded Bullion"
-            body="Recognised bullion presentation from Iconic and selected global refineries, with clear purity and weight details."
+            body="Recognised premium bullion products"
+            to="bullion?type=branded"
           />
         </div>
       </section>
-      <section className="feature-band">
-        <div>
-          <ShieldCheck />
-          <h2>Verification before trading</h2>
-          <p>Individual and Australian Company flows collect realistic KYC details, document uploads and mock review states.</p>
-        </div>
-        <div>
-          <Clock />
-          <h2>10-minute price lock</h2>
-          <p>Cart prices lock while checkout is completed and refresh safely when the timer expires.</p>
-        </div>
-        <div>
-          <Barcode />
-          <h2>Iconic serial checks</h2>
-          <p>Public authenticity lookup is limited to Iconic-branded bullion and never exposes customer information.</p>
+      <section className="section featured-section">
+        <SectionHead eyebrow="Featured Bullion" title="Live-priced gold bars" action={<Link href="/bullion">View all bullion</Link>} />
+        <div className="product-grid figma-products">
+          {featuredProducts.map((product) => (
+            <ProductCard key={product.id} product={product} onAdd={onAdd} verification={verification} />
+          ))}
         </div>
       </section>
-      <section className="split-section">
-        <OptimisedImage
-          src="/images/home/iconic-bullion-feature.webp"
-          alt="Iconic Bullion gold bar with serial verification presentation"
-          className="own-brand-image"
-          sizes="(max-width: 900px) 100vw, 48vw"
-        />
+      <section className="split-section bar-size-section">
+        <OptimisedImage src="/images/home/bar-sizes.webp" alt="Gold bar size range" className="bar-size-image" sizes="(max-width: 900px) 100vw, 48vw" />
         <div>
-          <span className="eyebrow">Own-brand bullion</span>
-          <h2>Certificate-ready Iconic bars</h2>
-          <p>Demonstrate barcode or serial verification, printable certificates and trust-led post-purchase service without exposing confidential order data.</p>
-          <PrimaryButton href="serial-verification" variant="secondary">
-            Verify Serial
+          <span className="eyebrow gold">Bullion for every strategy</span>
+          <h2>Choose the weight that suits you.</h2>
+          <p>From compact 1g minted bars through to substantial 1kg investment bars, explore bullion across a wide range of weights.</p>
+          <div className="weight-list">
+            {sizeLabels.map((label) => (
+              <span key={label}>{label}</span>
+            ))}
+          </div>
+          <PrimaryButton href="bullion">Explore All Sizes</PrimaryButton>
+        </div>
+      </section>
+      <section className="pricing-explainer">
+        <div>
+          <h2>Pricing that moves with the market.</h2>
+          <p>Our bullion prices are linked to the live gold spot market, updated on the shared pricing cycle.</p>
+        </div>
+        <div className="pricing-steps">
+          {pricingSteps.map(([title, body], index) => (
+            <article key={title}>
+              <span>{title}</span>
+              <p>{body}</p>
+              {index < pricingSteps.length - 1 && <strong aria-hidden="true">→</strong>}
+            </article>
+          ))}
+        </div>
+        <div className="price-lock-callout">
+          <span>When added to cart, your price is locked for:</span>
+          <strong>
+            <Clock size={15} /> PRICE LOCKED · 10:00
+          </strong>
+          <PrimaryButton href="market" variant="secondary">
+            View Live Gold Price
           </PrimaryButton>
         </div>
       </section>
-      <section className="section">
-        <SectionHead eyebrow="Service model" title="Pickup, insured delivery and wholesale support" />
-        <div className="three">
-          <MiniCard
-            image="/images/home/secure-delivery.webp"
-            imageAlt="Gold bullion prepared in secure premium packaging"
-            title="Pickup & insured delivery"
-            body="Free store pickup is available, with insured delivery represented by a configurable fulfilment fee."
-          />
-          <MiniCard
-            image="/images/home/verification-trust.webp"
-            imageAlt="Gold bullion bar displayed with authenticity certificate"
-            title="Authenticity verification"
-            body="Iconic-branded bullion can be checked by serial number with certificate-ready authenticity details."
-          />
-          <MiniCard
-            image="/images/home/wholesale.webp"
-            imageAlt="Multiple gold bullion bars prepared for wholesale supply"
-            title="Wholesale enquiries"
-            body="Business customers can enquire about availability, weights and trade supply."
-          />
+      <section className="split-section iconic-brand-section">
+        <OptimisedImage src="/images/home/iconic-bullion-feature.webp" alt="Iconic Bullion gold bar with serial verification presentation" className="own-brand-image" sizes="(max-width: 900px) 100vw, 48vw" />
+        <div>
+          <span className="eyebrow gold">Iconic Bullion</span>
+          <h2>Bullion you can verify.</h2>
+          <p>Selected Iconic Bullion bars feature unique serial identification and certificate-ready authenticity verification.</p>
+          <ul className="check-list">
+            {["999.9 Fine Gold", "Unique serial identification", "Barcode / serial verification", "Printable authenticity certificate"].map((item) => (
+              <li key={item}>
+                <Check size={14} /> {item}
+              </li>
+            ))}
+          </ul>
+          <div className="split-actions">
+            <PrimaryButton href="bullion?brand=Iconic%20Bullion">Explore Iconic Bullion</PrimaryButton>
+            <PrimaryButton href="serial-verification" variant="secondary">
+              Verify Serial
+            </PrimaryButton>
+          </div>
         </div>
       </section>
+      <section className="trust-section">
+        <div className="trust-grid">
+          <div>
+            <h2>Confidence in every bar.</h2>
+            <p>Iconic Bullion combines account verification, transparent pricing and authenticity controls to create a secure bullion purchasing experience.</p>
+          </div>
+          <div>
+            {trustItems.map(([title, body]) => (
+              <article key={title}>
+                <h3>{title}</h3>
+                <p>{body}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+        <OptimisedImage src="/images/home/verification-trust.webp" alt="Gold bullion bar displayed with authenticity certificate" className="trust-image" sizes="(max-width: 900px) 100vw, 90vw" />
+      </section>
+      <section className="delivery-section">
+        <SectionHead eyebrow="Fulfilment" title="Receive your bullion your way." />
+        <div className="delivery-grid">
+          <OptimisedImage src="/images/home/secure-delivery.webp" alt="Gold bullion prepared in secure premium packaging" className="delivery-image" sizes="(max-width: 900px) 100vw, 58vw" />
+          <div>
+            <article>
+              <PackageCheck />
+              <h3>Store Pickup</h3>
+              <p>Collect your bullion directly after payment confirmation.</p>
+              <strong>Free</strong>
+            </article>
+            <article>
+              <ShieldCheck />
+              <h3>Insured Delivery</h3>
+              <p>Secure delivery options for eligible orders, with discreet packaging and insurance represented in checkout.</p>
+              <strong>Calculated after shipping configuration</strong>
+            </article>
+          </div>
+        </div>
+      </section>
+      <section className="wholesale-band">
+        <div>
+          <span className="eyebrow gold">Wholesale Bullion</span>
+          <h2>Bullion supply for professional buyers.</h2>
+          <p>Speak with Iconic Bullion about wholesale availability, trade quantities and business requirements.</p>
+          <PrimaryButton href="wholesale" variant="secondary">
+            Wholesale Enquiry
+          </PrimaryButton>
+        </div>
+        <OptimisedImage src="/images/home/wholesale.webp" alt="Multiple gold bullion bars prepared for wholesale supply" className="wholesale-image" sizes="(max-width: 900px) 100vw, 48vw" />
+      </section>
+      <section className="why-section">
+        <h2>Why Iconic Bullion</h2>
+        <div>
+          {whyItems.map(([title, body]) => (
+            <article key={title}>
+              <span />
+              <h3>{title}</h3>
+              <p>{body}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+      <NewsletterStrip />
     </>
+  );
+}
+
+function NewsletterStrip() {
+  const [email, setEmail] = useState("");
+  const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
+  return (
+    <section className="newsletter-strip">
+      <div>
+        <h2>Stay informed on gold.</h2>
+        <p>Market updates, new products and bullion news from Iconic Bullion.</p>
+      </div>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          setStatus(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? "success" : "error");
+        }}
+      >
+        <label className="sr-only" htmlFor="newsletter-email">
+          Email address
+        </label>
+        <input id="newsletter-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Your email address" />
+        <button type="submit">Subscribe</button>
+        {status === "success" && <p role="status">Thanks. You are on the prototype update list.</p>}
+        {status === "error" && <p role="alert">Enter a valid email address.</p>}
+      </form>
+    </section>
   );
 }
 
@@ -836,9 +987,9 @@ function SectionHead({ eyebrow, title, action }: { eyebrow: string; title: strin
   );
 }
 
-function CategoryCard({ image, alt, title, body }: { image: string; alt: string; title: string; body: string }) {
+function CategoryCard({ image, alt, title, body, to }: { image: string; alt: string; title: string; body: string; to: string }) {
   return (
-    <Link href="/bullion" className="category-card">
+    <Link href={href(to)} className="category-card">
       <OptimisedImage src={image} alt={alt} sizes="(max-width: 900px) 100vw, 33vw" />
       <div>
         <h3>{title}</h3>
@@ -894,7 +1045,7 @@ function Listing({
           <label>
             Brand
             <select value={brand} onChange={(event) => setBrand(event.target.value)}>
-              {["All", "Iconic Bullion", "PAMP Suisse", "Emirates Gold", "Generic", "ABC / Placeholder Brand"].map((option) => (
+              {["All", "Iconic Bullion", "Aurelia Reserve", "PAMP Suisse", "Emirates Gold", "Generic", "ABC / Placeholder Brand"].map((option) => (
                 <option key={option}>{option}</option>
               ))}
             </select>
@@ -969,10 +1120,10 @@ function ProductDetail({
     <section className="page-shell">
       <div className="product-detail">
         <div className="gallery">
-          <PlaceholderImage src={product.gallery[0]} className="main-product-image" />
+          <ProductMedia src={product.gallery[0]} alt={`${product.brand} ${product.name}`} className="main-product-image" />
           <div className="thumbs">
             {product.gallery.map((src) => (
-              <PlaceholderImage key={src} src={src} />
+              <ProductMedia key={src} src={src} alt={`${product.brand} ${product.name}`} />
             ))}
           </div>
         </div>
@@ -1258,7 +1409,7 @@ function CartPage({
           <div className="line-list">
             {lines.map((line) => (
               <article className="cart-line" key={line.productId}>
-                <PlaceholderImage src={line.product.image} />
+                <ProductMedia src={line.product.image} alt={`${line.product.brand} ${line.product.name}`} />
                 <div>
                   <strong>
                     {line.product.brand} {line.product.name}

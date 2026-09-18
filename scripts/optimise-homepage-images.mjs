@@ -5,8 +5,16 @@ import sharp from "sharp";
 const projectRoot = process.cwd();
 const sourceRoot = "/Users/amankumarsingh/Downloads/Iconic Bullion Images/Homepage";
 const outputRoot = path.join(projectRoot, "public/images/home");
+const productOutputRoot = path.join(projectRoot, "public/images/products");
 
 const assets = [
+  {
+    source: "/tmp/iconic-figma-home/src/imports/Brand_Logo.png",
+    output: "brand-logo.webp",
+    maxWidth: 520,
+    quality: 88,
+    extract: { left: 150, top: 250, width: 1150, height: 500 }
+  },
   {
     source: "Homepage Hero Image.png",
     output: "bullion-hero.webp",
@@ -54,6 +62,39 @@ const assets = [
     output: "branded-bullion.webp",
     maxWidth: 1100,
     quality: 84
+  },
+  {
+    source: "Available Bullion Sizes : Gold Bar Range.png",
+    output: "bar-sizes.webp",
+    maxWidth: 1500,
+    quality: 84
+  }
+];
+
+const productAssets = [
+  {
+    source: "Iconic Bullion 1g Minted Gold Bar.png",
+    output: "iconic-1g.webp",
+    maxWidth: 1000,
+    quality: 84
+  },
+  {
+    source: "Iconic Bullion 5g Minted Gold Bar.png",
+    output: "iconic-5g.webp",
+    maxWidth: 1000,
+    quality: 84
+  },
+  {
+    source: "Iconic Bullion 10g Minted Gold Bar.png",
+    output: "iconic-10g.webp",
+    maxWidth: 1000,
+    quality: 84
+  },
+  {
+    source: "Premium 1g Third-Party Branded Gold Bar.png",
+    output: "premium-1g.webp",
+    maxWidth: 1000,
+    quality: 84
   }
 ];
 
@@ -63,17 +104,25 @@ function formatBytes(bytes) {
 }
 
 await fs.mkdir(outputRoot, { recursive: true });
+await fs.mkdir(productOutputRoot, { recursive: true });
 
 const rows = [];
 
-for (const asset of assets) {
-  const sourcePath = path.join(sourceRoot, asset.source);
+async function optimise(asset, destinationRoot, publicPrefix) {
+  const sourcePath = path.isAbsolute(asset.source) ? asset.source : path.join(sourceRoot, asset.source);
   const outputPath = path.join(outputRoot, asset.output);
+  const destinationPath = path.join(destinationRoot, asset.output);
   const inputStats = await fs.stat(sourcePath);
   const metadata = await sharp(sourcePath).metadata();
-  const width = metadata.width && metadata.width > asset.maxWidth ? asset.maxWidth : metadata.width;
 
-  await sharp(sourcePath)
+  let pipeline = sharp(sourcePath);
+  if (asset.extract) {
+    pipeline = pipeline.extract(asset.extract);
+  }
+  const outputMetadata = asset.extract ? await pipeline.clone().metadata() : metadata;
+  const width = outputMetadata.width && outputMetadata.width > asset.maxWidth ? asset.maxWidth : outputMetadata.width;
+
+  await pipeline
     .resize({
       width,
       withoutEnlargement: true
@@ -82,17 +131,25 @@ for (const asset of assets) {
       quality: asset.quality,
       smartSubsample: true
     })
-    .toFile(outputPath);
+    .toFile(destinationPath);
 
-  const outputStats = await fs.stat(outputPath);
+  const outputStats = await fs.stat(destinationPath);
   rows.push({
     source: asset.source,
-    output: `public/images/home/${asset.output}`,
-    dimensions: `${metadata.width}x${metadata.height}`,
+    output: `${publicPrefix}/${asset.output}`,
+    dimensions: `${metadata.width}x${metadata.height}${asset.extract ? ` -> ${outputMetadata.width}x${outputMetadata.height}` : ""}`,
     maxWidth: asset.maxWidth,
     before: formatBytes(inputStats.size),
     after: formatBytes(outputStats.size)
   });
+}
+
+for (const asset of assets) {
+  await optimise(asset, outputRoot, "public/images/home");
+}
+
+for (const asset of productAssets) {
+  await optimise(asset, productOutputRoot, "public/images/products");
 }
 
 console.table(rows);
