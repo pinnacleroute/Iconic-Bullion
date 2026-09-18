@@ -77,7 +77,15 @@ export const products: BullionProduct[] = [
     stock: 12,
     availability: "Low Stock",
     image: "/images/products/iconic-10g.webp",
-    gallery: ["/images/products/iconic-10g.webp", "/images/serial/iconic-bar-serial.jpg"],
+    gallery: [
+      "/images/products/iconic-10g.webp",
+      "/images/products/iconic-10g-back.webp",
+      "/images/products/iconic-10g-detail.webp",
+      "/images/products/iconic-10g-packaging.webp",
+      "/images/products/iconic-10g-serial.webp",
+      "/images/products/iconic-10g-certificate.webp",
+      "/images/products/iconic-10g-dimensions.webp"
+    ],
     iconicSerialEligible: true,
     featured: true
   },

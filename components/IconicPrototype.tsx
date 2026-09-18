@@ -635,7 +635,7 @@ export function IconicPrototype({ route }: { route: string }) {
     return result;
   }, [availability, brand, market, productType, query, sort, weight]);
 
-  function addToCart(product: BullionProduct) {
+  function addToCart(product: BullionProduct, quantity = 1) {
     if (verification !== "approved") {
       setVerification(verification === "logged-out" ? "unverified" : verification);
       router.push(href("verification"));
@@ -643,8 +643,8 @@ export function IconicPrototype({ route }: { route: string }) {
     }
     setCart((lines) => {
       const existing = lines.find((line) => line.productId === product.id);
-      if (existing) return lines.map((line) => (line.productId === product.id ? { ...line, quantity: line.quantity + 1 } : line));
-      return [...lines, { productId: product.id, quantity: 1, lockedPrice: calculateProductBullionPrice(product, market), lockedAt: Date.now() }];
+      if (existing) return lines.map((line) => (line.productId === product.id ? { ...line, quantity: line.quantity + quantity } : line));
+      return [...lines, { productId: product.id, quantity, lockedPrice: calculateProductBullionPrice(product, market), lockedAt: Date.now() }];
     });
     router.push(href("cart"));
   }
@@ -684,7 +684,7 @@ export function IconicPrototype({ route }: { route: string }) {
           />
         );
       case "product":
-        return <ProductDetail product={selectedProduct} verification={verification} onAdd={addToCart} onApprove={approveDemo} />;
+        return <ProductDetail product={selectedProduct} market={market} verification={verification} onAdd={addToCart} />;
       case "market":
         return <MarketPage market={market} currency={currency} setCurrency={setCurrency} />;
       case "buy-sell":
@@ -754,7 +754,7 @@ export function IconicPrototype({ route }: { route: string }) {
       case "filter-empty":
         return <StatePage kind="filter-empty" />;
       case "out-of-stock":
-        return <ProductDetail product={products.find((p) => p.id === "cast-1kg")!} verification={verification} onAdd={addToCart} onApprove={approveDemo} />;
+        return <ProductDetail product={products.find((p) => p.id === "cast-1kg")!} market={market} verification={verification} onAdd={addToCart} />;
       case "coming-soon":
         return <StatePage kind="coming-soon" />;
       case "error":
@@ -1189,27 +1189,107 @@ function Listing({
   );
 }
 
+type ProductGalleryItem = {
+  src: string;
+  label: string;
+  alt: string;
+  fit?: "contain" | "cover";
+};
+
+function getProductGallery(product: BullionProduct): ProductGalleryItem[] {
+  if (product.id === "iconic-10g") {
+    return [
+      {
+        src: "/images/products/iconic-10g.webp",
+        label: "Front",
+        alt: "Front view of Iconic Bullion 10 gram minted gold bar"
+      },
+      {
+        src: "/images/products/iconic-10g-back.webp",
+        label: "Back",
+        alt: "Reverse view of Iconic Bullion 10 gram minted gold bar"
+      },
+      {
+        src: "/images/products/iconic-10g-detail.webp",
+        label: "Detail",
+        alt: "Close-up engraving and 999.9 purity view of Iconic Bullion 10 gram gold bar",
+        fit: "cover"
+      },
+      {
+        src: "/images/products/iconic-10g-packaging.webp",
+        label: "Packaging",
+        alt: "Iconic Bullion 10 gram bar in sealed assay-card packaging"
+      },
+      {
+        src: "/images/products/iconic-10g-serial.webp",
+        label: "Serial",
+        alt: "Serial number and barcode verification close-up on Iconic Bullion 10 gram bar",
+        fit: "cover"
+      },
+      {
+        src: "/images/products/iconic-10g-certificate.webp",
+        label: "Certificate",
+        alt: "Certificate of Authenticity preview for Iconic Bullion 10 gram gold bar",
+        fit: "cover"
+      },
+      {
+        src: "/images/products/iconic-10g-dimensions.webp",
+        label: "Dimensions",
+        alt: "Dimensions reference view of Iconic Bullion 10 gram gold bar",
+        fit: "cover"
+      }
+    ];
+  }
+
+  return product.gallery.map((src, index) => ({
+    src,
+    label: index === 0 ? "Front" : `View ${index + 1}`,
+    alt: `${product.brand} ${product.name} product image`
+  }));
+}
+
 function ProductDetail({
   product,
+  market,
   verification,
-  onAdd,
-  onApprove
+  onAdd
 }: {
   product: BullionProduct;
+  market: typeof marketSnapshot;
   verification: VerificationState;
-  onAdd: (product: BullionProduct) => void;
-  onApprove: () => void;
+  onAdd: (product: BullionProduct, quantity?: number) => void;
 }) {
-  const price = calculateProductBullionPrice(product, marketSnapshot);
+  const gallery = getProductGallery(product);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [quantity, setQuantity] = useState(1);
+  const active = gallery[activeIndex] || gallery[0];
+  const price = calculateProductBullionPrice(product, market);
   const unavailable = product.availability === "Out of Stock" || product.availability === "Coming Soon";
+  const maxQuantity = Math.max(product.stock || 1, 1);
+  const related = products
+    .filter((item) => item.id !== product.id && item.brand === product.brand)
+    .sort((a, b) => a.weightGrams - b.weightGrams)
+    .slice(0, 4);
+  const ctaLabel = verification === "approved" ? "Add to Cart" : verification === "logged-out" ? "Sign In to Purchase" : "Verify to Purchase";
+
   return (
-    <section className="page-shell">
+    <section className="page-shell product-detail-page">
+      <nav className="breadcrumb" aria-label="Breadcrumb">
+        <Link href="/">Home</Link>
+        <span>/</span>
+        <Link href="/bullion">Bullion</Link>
+        <span>/</span>
+        <span>{product.brand} {product.name}</span>
+      </nav>
       <div className="product-detail">
-        <div className="gallery">
-          <ProductMedia src={product.gallery[0]} alt={`${product.brand} ${product.name}`} className="main-product-image" />
-          <div className="thumbs">
-            {product.gallery.map((src) => (
-              <ProductMedia key={src} src={src} alt={`${product.brand} ${product.name}`} />
+        <div className="gallery detail-gallery">
+          <OptimisedImage src={active.src} alt={active.alt} className={cx("main-product-image", active.fit === "cover" && "image-cover")} priority sizes="(max-width: 900px) 100vw, 58vw" />
+          <div className="thumbs detail-thumbs" role="list" aria-label="Product gallery">
+            {gallery.map((item, index) => (
+              <button key={item.src} className={index === activeIndex ? "active" : ""} onClick={() => setActiveIndex(index)} aria-label={`Show ${item.label.toLowerCase()} image`}>
+                <OptimisedImage src={item.src} alt={item.alt} sizes="120px" />
+                <span>{item.label}</span>
+              </button>
             ))}
           </div>
         </div>
@@ -1217,29 +1297,117 @@ function ProductDetail({
           <span className="eyebrow">{product.brand}</span>
           <h1>{product.name}</h1>
           <p>{product.purity} · {product.type}</p>
-          <div className="quote-box">
-            <span>Current selling price</span>
+          <div className="quote-box live-price-box">
+            <span>Live Price</span>
             <strong>{formatAUD(price)}</strong>
-            <small>Calculated from live mock market price plus {product.marginPercent}% product margin. No tax added in this prototype.</small>
+            <small>Prices refresh approximately every 5 minutes. Your live bullion price is locked for 10 minutes after adding the product to your cart.</small>
           </div>
           <div className="spec-grid">
             <Info label="Weight" value={product.weightLabel} />
             <Info label="Stock" value={product.stock || "Unavailable"} />
             <Info label="Availability" value={product.availability} />
-            <Info label="Updated" value={marketSnapshot.lastUpdated} />
+            <Info label="Updated" value={market.lastUpdated} />
           </div>
           {product.iconicSerialEligible && <StatusPill tone="gold">Serial verification available</StatusPill>}
-          {verification !== "approved" && <VerificationGate onApprove={onApprove} />}
+          <div className="quantity-row" aria-label="Quantity selector">
+            <button onClick={() => setQuantity((current) => Math.max(1, current - 1))} disabled={quantity <= 1}>-</button>
+            <strong>{quantity}</strong>
+            <button onClick={() => setQuantity((current) => Math.min(maxQuantity, current + 1))} disabled={quantity >= maxQuantity}>+</button>
+          </div>
+          {verification !== "approved" && (
+            <section className="detail-gate">
+              <span className="eyebrow">Verification required</span>
+              <p>To purchase bullion, please complete your identity verification first.</p>
+              <PrimaryButton href={verification === "logged-out" ? "login" : "verification"} variant="secondary">
+                {verification === "logged-out" ? "Sign In" : "Complete Verification"}
+              </PrimaryButton>
+            </section>
+          )}
           <div className="split-actions">
-            <PrimaryButton onClick={() => onAdd(product)} disabled={unavailable} variant={verification === "approved" ? "primary" : "secondary"}>
-              {verification === "approved" ? "Add to Cart" : "Verify to Purchase"}
+            <PrimaryButton onClick={() => onAdd(product, quantity)} disabled={unavailable || verification !== "approved"} variant="primary">
+              {unavailable ? product.availability : ctaLabel}
             </PrimaryButton>
             <PrimaryButton href="contact" variant="ghost">
               Enquire
             </PrimaryButton>
           </div>
+          <p className="policy-note">
+            Bullion orders are subject to our <Link href="/refund-policy">refund and cancellation policy</Link>.
+          </p>
         </div>
       </div>
+
+      <section className="detail-section detail-highlights">
+        <SectionHead eyebrow="Highlights" title="Investment-grade details" />
+        <div>
+          {[
+            product.purity,
+            `${product.weightLabel} investment-grade bullion`,
+            `${product.brand} own-brand presentation`,
+            product.iconicSerialEligible ? "Serial verification available" : "Certificate-ready authenticity",
+            "Secure pickup or insured delivery"
+          ].map((item) => (
+            <article key={item}>{item}</article>
+          ))}
+        </div>
+      </section>
+
+      <section className="detail-section detail-specifications">
+        <SectionHead eyebrow="Specifications" title="Product information" />
+        <div className="spec-grid">
+          <Info label="Brand" value={product.brand} />
+          <Info label="Product" value={product.name} />
+          <Info label="Weight" value={product.weightLabel} />
+          <Info label="Purity" value={product.purity.replace(" Fine Gold", "")} />
+          <Info label="Type" value={product.type.replace(" Bars", "")} />
+          <Info label="Material" value="Gold" />
+          <Info label="Serial Verification" value={product.iconicSerialEligible ? "Available" : "Not available"} />
+          <Info label="Packaging" value={product.id === "iconic-10g" ? "Assay-style sealed packaging" : "Product packaging varies by brand"} />
+          <Info label="Dimensions" value="Final product dimensions to be confirmed." />
+        </div>
+      </section>
+
+      {product.id === "iconic-10g" && (
+        <>
+          <section className="detail-feature">
+            <OptimisedImage src="/images/products/iconic-10g-serial.webp" alt="Serial number and barcode detail on Iconic Bullion 10 gram bar" sizes="(max-width: 900px) 100vw, 50vw" />
+            <div>
+              <span className="eyebrow">Serial Verification</span>
+              <h2>Verify your Iconic Bullion bar</h2>
+              <p>Selected Iconic Bullion bars include unique serial identification that can be checked through the website.</p>
+              <PrimaryButton href="serial-verification" variant="secondary">Verify Serial</PrimaryButton>
+            </div>
+          </section>
+
+          <section className="detail-feature reverse">
+            <OptimisedImage src="/images/products/iconic-10g-certificate.webp" alt="Certificate of authenticity preview for Iconic Bullion 10 gram gold bar" sizes="(max-width: 900px) 100vw, 50vw" />
+            <div>
+              <span className="eyebrow">Authenticity</span>
+              <h2>Certificate of Authenticity</h2>
+              <p>Verified Iconic Bullion products can display a product-specific authenticity certificate associated with the serial number.</p>
+              <PrimaryButton href="certificate" variant="secondary">View Sample Certificate</PrimaryButton>
+            </div>
+          </section>
+        </>
+      )}
+
+      <section className="detail-section fulfilment-strip">
+        <SectionHead eyebrow="Fulfilment" title="Receive your bullion your way" />
+        <div className="spec-grid">
+          <Info label="Store Pickup" value="Free" />
+          <Info label="Insured Delivery" value="Fee calculated separately" />
+          <Info label="Payment Method" value="Bank Transfer" />
+        </div>
+      </section>
+
+      <section className="detail-section">
+        <SectionHead eyebrow="Related Products" title="Explore nearby weights" />
+        <div className="product-grid">
+          {related.map((item) => (
+            <ProductCard key={item.id} product={item} market={market} onAdd={onAdd} verification={verification} />
+          ))}
+        </div>
+      </section>
     </section>
   );
 }

@@ -13,7 +13,13 @@ const images = [
   ["iconic-bullion-100g.png", "iconic-bullion-100g.webp"],
   ["iconic-bullion-250g.png", "iconic-bullion-250g.webp"],
   ["iconic-bullion-500g.png", "iconic-bullion-500g.webp"],
-  ["iconic-bullion-1kg.png", "iconic-bullion-1kg.webp"]
+  ["iconic-bullion-1kg.png", "iconic-bullion-1kg.webp"],
+  ["iconic-10g-back.png", "iconic-10g-back.webp"],
+  ["iconic-10g-detail.png", "iconic-10g-detail.webp"],
+  ["iconic-10g-packaging.png", "iconic-10g-packaging.webp"],
+  ["iconic-10g-serial.png", "iconic-10g-serial.webp"],
+  ["iconic-10g-certificate.png", "iconic-10g-certificate.webp"],
+  ["iconic-10g-dimensions.png", "iconic-10g-dimensions.webp"]
 ];
 
 await fs.mkdir(outputDir, { recursive: true });
@@ -27,11 +33,12 @@ for (const [sourceName, outputName] of images) {
 
   const image = sharp(source, { limitInputPixels: false });
   const metadata = await image.metadata();
+  const maxDimension = sourceName.startsWith("iconic-bullion-") ? 1200 : 1448;
 
   await image
     .resize({
-      width: Math.min(metadata.width ?? 1200, 1200),
-      height: Math.min(metadata.height ?? 1200, 1200),
+      width: Math.min(metadata.width ?? maxDimension, maxDimension),
+      height: Math.min(metadata.height ?? maxDimension, maxDimension),
       fit: "inside",
       withoutEnlargement: true
     })
