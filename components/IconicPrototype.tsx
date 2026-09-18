@@ -169,6 +169,10 @@ function ProductMedia({ src, alt, className }: { src: string; alt: string; class
   return <PlaceholderImage src={src} className={className} />;
 }
 
+function hasPublishedProductImage(product: BullionProduct) {
+  return product.image.startsWith("/images/products/") && product.image.endsWith(".webp");
+}
+
 function StatusPill({ children, tone = "neutral" }: { children: React.ReactNode; tone?: "green" | "gold" | "red" | "neutral" }) {
   return <span className={`status-pill ${tone}`}>{children}</span>;
 }
@@ -617,7 +621,7 @@ export function IconicPrototype({ route }: { route: string }) {
       const weightMatch = weight === "All" || product.weightLabel === weight;
       const availabilityMatch = availability === "All" || product.availability === availability;
       const queryMatch = !query || `${product.brand} ${product.name} ${product.weightLabel}`.toLowerCase().includes(lower);
-      return brandMatch && typeMatch && weightMatch && availabilityMatch && queryMatch;
+      return hasPublishedProductImage(product) && brandMatch && typeMatch && weightMatch && availabilityMatch && queryMatch;
     });
     if (sort === "Featured") {
       result = result.sort((a, b) => {
