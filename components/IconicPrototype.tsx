@@ -214,30 +214,30 @@ function LivePriceStrip({
 }) {
   return (
     <section className="price-strip" aria-label="Live gold price">
-      <div>
+      <div className="ticker-label">
         <strong>Gold Spot</strong>
-        <span>{currency === "AUD" ? `${formatAUD(market.audPerOz)} / oz` : `${formatUSD(market.usdPerOz)} / oz`}</span>
       </div>
-      <div>
-        <strong>Per gram</strong>
-        <span>{formatAUD(getGoldPricePerGram(market))}</span>
-      </div>
-      <div>
-        <strong>Last updated</strong>
-        <span>{market.lastUpdated}</span>
-      </div>
-      <div>
-        <strong>Market</strong>
-        <span className="market-open">Open</span>
-      </div>
-      <div className="segmented" aria-label="Currency">
+      <div className="ticker-price">
         <button className={currency === "AUD" ? "active" : ""} onClick={() => onCurrency("AUD")}>
           AUD
         </button>
+        <span>{formatAUD(market.audPerOz)} / oz</span>
+      </div>
+      <div className="ticker-price">
         <button className={currency === "USD" ? "active" : ""} onClick={() => onCurrency("USD")}>
           USD
         </button>
+        <span>{formatUSD(market.usdPerOz)} / oz</span>
       </div>
+      <div className="ticker-change" aria-label="Market movement">
+        ▲ +0.32%
+      </div>
+      <div className="ticker-meta">
+        Updated {market.lastUpdated} · 5 min refresh
+      </div>
+      <Link className="ticker-link" href="/market">
+        View live pricing →
+      </Link>
     </section>
   );
 }
@@ -271,7 +271,7 @@ function Header({
       <div className="topbar">
         <Link className="brand" href="/">
           <span className="brand-logo">
-            <Image src="/images/home/brand-logo.webp" alt="Iconic Bullion" fill sizes="150px" />
+            <Image src="/images/home/brand-logo-full.png" alt="Iconic Bullion" fill sizes="240px" priority />
           </span>
         </Link>
         <nav className="desktop-nav" aria-label="Primary">
@@ -283,7 +283,7 @@ function Header({
         </nav>
         <nav className="desktop-actions" aria-label="Actions">
           {actions.map(([label, route]) => (
-            <Link key={route} href={href(route)}>
+            <Link key={route} href={href(route)} className={route === "market" ? "live-gold-link" : undefined}>
               {label}
             </Link>
           ))}
@@ -316,21 +316,30 @@ function Header({
 function Footer() {
   const groups = [
     {
-      title: "Shop",
+      title: "Bullion",
       links: [
-        ["Bullion", "bullion"],
+        ["Shop Bullion", "bullion"],
         ["Live Gold Price", "market"],
-        ["Wholesale", "wholesale"],
+        ["Buy / Sell Pricing", "buy-sell"],
         ["Serial Verification", "serial-verification"]
       ]
     },
     {
-      title: "Support",
+      title: "Account",
       links: [
-        ["FAQ", "faq"],
-        ["Contact", "contact"],
-        ["Delivery", "delivery-policy"],
-        ["Refunds", "refund-policy"]
+        ["Sign In", "login"],
+        ["Create Account", "signup"],
+        ["Verification", "verification"],
+        ["Orders", "account/orders"]
+      ]
+    },
+    {
+      title: "Company",
+      links: [
+        ["About", "about"],
+        ["Wholesale", "wholesale"],
+        ["Enquire", "contact"],
+        ["FAQ", "faq"]
       ]
     },
     {
@@ -344,9 +353,11 @@ function Footer() {
   ];
   return (
     <footer className="footer">
-      <div>
-        <strong>Iconic Bullion</strong>
-        <p>Secure bullion purchasing, clear live pricing, bank-transfer ordering and professional account verification.</p>
+      <div className="footer-brand">
+        <span className="footer-logo">
+          <Image src="/images/home/brand-logo-full.png" alt="Iconic Bullion" fill sizes="260px" />
+        </span>
+        <p>Premium Australian bullion with transparent live pricing and secure verification.</p>
       </div>
       <div className="footer-groups">
         {groups.map((group) => (
@@ -368,28 +379,33 @@ function ProductCard({
   product,
   onAdd,
   verification,
-  compact
+  compact,
+  showcase = false,
+  displayPrice
 }: {
   product: BullionProduct;
   onAdd: (product: BullionProduct) => void;
   verification: VerificationState;
   compact?: boolean;
+  showcase?: boolean;
+  displayPrice?: string;
 }) {
   const price = calculateProductBullionPrice(product, marketSnapshot);
   const disabled = product.availability === "Out of Stock" || product.availability === "Coming Soon";
   return (
-    <article className={cx("product-card", compact && "compact")}>
+    <article className={cx("product-card", compact && "compact", showcase && "showcase")}>
       <Link href={`/product?id=${product.id}`} aria-label={`View ${product.brand} ${product.name}`}>
         <ProductMedia src={product.image} alt={`${product.brand} ${product.name}`} />
       </Link>
       <div className="product-copy">
+        {showcase && <span className="live-price-label">Live Price</span>}
         <span className="eyebrow">{product.brand}</span>
         <h3>{product.name}</h3>
         <p>
           {product.weightLabel} · {product.purity}
         </p>
         <div className="price-row">
-          <strong>{formatAUD(price)}</strong>
+          <strong>{displayPrice || formatAUD(price)}</strong>
           <StatusPill tone={product.availability === "In Stock" ? "green" : product.availability === "Low Stock" ? "gold" : "neutral"}>
             {product.availability}
           </StatusPill>
@@ -397,11 +413,13 @@ function ProductCard({
       </div>
       <div className="card-actions">
         <PrimaryButton href={`product?id=${product.id}`} variant="secondary">
-          View
+          View Product
         </PrimaryButton>
-        <PrimaryButton onClick={() => onAdd(product)} disabled={disabled} variant={verification === "approved" ? "primary" : "secondary"}>
-          {verification === "approved" ? "Add" : "Verify"}
-        </PrimaryButton>
+        {!showcase && (
+          <PrimaryButton onClick={() => onAdd(product)} disabled={disabled} variant={verification === "approved" ? "primary" : "secondary"}>
+            {verification === "approved" ? "Add" : "Verify"}
+          </PrimaryButton>
+        )}
       </div>
     </article>
   );
@@ -739,6 +757,12 @@ export function IconicPrototype({ route }: { route: string }) {
 
 function Home({ onAdd, verification }: { onAdd: (product: BullionProduct) => void; verification: VerificationState }) {
   const featuredProducts = products.filter((p) => p.featured).slice(0, 4);
+  const featuredPrices: Record<string, string> = {
+    "iconic-1g": "AUD $385.00",
+    "iconic-5g": "AUD $1,185.00",
+    "iconic-10g": "AUD $2,340.00",
+    "premium-1g": "AUD $385.00"
+  };
   const sizeLabels = ["1g", "2.5g", "5g", "10g", "20g", "1oz", "50g", "100g", "250g", "500g", "1kg"];
   const pricingSteps = [
     ["Live Gold Market", "Spot price, refreshed every 5 min"],
@@ -752,10 +776,10 @@ function Home({ onAdd, verification }: { onAdd: (product: BullionProduct) => voi
     ["Transparent order records", "Clear invoices and order records for every transaction."]
   ];
   const whyItems = [
-    ["Live Pricing", "Prices linked to mock market movements, refreshed on the shared pricing cycle."],
-    ["Secure Verification", "Customer verification before trading and serial controls for selected Iconic bullion."],
-    ["Bank Transfer", "Clear invoice-based settlement with no card or wallet checkout in this prototype."],
-    ["Pickup or Delivery", "Free store pickup or insured delivery represented by configurable fulfilment."]
+    ["Live Pricing", "Prices linked to current bullion market movements, refreshed every 5 minutes."],
+    ["Secure Verification", "Customer verification before trading. Authenticity controls for selected Iconic bullion."],
+    ["Bank Transfer", "Clear invoice-based settlement. No payment surcharge on bank transfer."],
+    ["Pickup or Delivery", "Free store pickup or fully insured secure delivery for eligible orders."]
   ];
 
   return (
@@ -791,7 +815,7 @@ function Home({ onAdd, verification }: { onAdd: (product: BullionProduct) => voi
         />
       </section>
       <section className="section category-section">
-        <SectionHead eyebrow="Explore Bullion" title="Investment-grade gold across formats" action={<Link href="/bullion">View all</Link>} />
+        <SectionHead title="Explore Bullion" subtitle="Investment-grade gold across a range of formats and weights." action={<Link href="/bullion">View all</Link>} />
         <div className="category-grid">
           <CategoryCard
             image="/images/home/minted-bars.webp"
@@ -817,10 +841,10 @@ function Home({ onAdd, verification }: { onAdd: (product: BullionProduct) => voi
         </div>
       </section>
       <section className="section featured-section">
-        <SectionHead eyebrow="Featured Bullion" title="Live-priced gold bars" action={<Link href="/bullion">View all bullion</Link>} />
+        <SectionHead title="Featured Bullion" subtitle="Live-priced gold bars." action={<Link href="/bullion">View all bullion</Link>} />
         <div className="product-grid figma-products">
           {featuredProducts.map((product) => (
-            <ProductCard key={product.id} product={product} onAdd={onAdd} verification={verification} />
+            <ProductCard key={product.id} product={product} onAdd={onAdd} verification={verification} showcase displayPrice={featuredPrices[product.id]} />
           ))}
         </div>
       </section>
@@ -841,7 +865,7 @@ function Home({ onAdd, verification }: { onAdd: (product: BullionProduct) => voi
       <section className="pricing-explainer">
         <div>
           <h2>Pricing that moves with the market.</h2>
-          <p>Our bullion prices are linked to the live gold spot market, updated on the shared pricing cycle.</p>
+          <p>Our bullion prices are linked directly to the live gold spot market, updated every 5 minutes.</p>
         </div>
         <div className="pricing-steps">
           {pricingSteps.map(([title, body], index) => (
@@ -975,12 +999,13 @@ function NewsletterStrip() {
   );
 }
 
-function SectionHead({ eyebrow, title, action }: { eyebrow: string; title: string; action?: React.ReactNode }) {
+function SectionHead({ eyebrow, title, subtitle, action }: { eyebrow?: string; title: string; subtitle?: string; action?: React.ReactNode }) {
   return (
     <div className="section-head">
       <div>
-        <span className="eyebrow">{eyebrow}</span>
+        {eyebrow && <span className="eyebrow">{eyebrow}</span>}
         <h2>{title}</h2>
+        {subtitle && <p>{subtitle}</p>}
       </div>
       {action}
     </div>
