@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type PointerEvent } from "react";
 import {
   AlertTriangle,
   BadgeCheck,
@@ -27,7 +27,8 @@ import {
   UserRound,
   X
 } from "lucide-react";
-import { historicalGold, marketSnapshot, mockOrders, products, serialRegistry, type BullionProduct } from "@/lib/mockData";
+import { marketSnapshot, mockOrders, products, serialRegistry, type BullionProduct } from "@/lib/mockData";
+import { marketPriceService, marketRanges, type HistoricalGoldPoint, type MarketRange } from "@/lib/marketData";
 import {
   calculateBuyBackPrice,
   calculateCartLockedPrice,
@@ -35,7 +36,8 @@ import {
   formatAUD,
   formatTimer,
   formatUSD,
-  getGoldPricePerGram
+  getGoldPricePerGram,
+  TROY_OUNCE_GRAMS
 } from "@/lib/pricing";
 
 type VerificationState = "logged-out" | "unverified" | "pending" | "approved" | "declined";
@@ -495,24 +497,45 @@ function Info({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-function Chart() {
-  const max = Math.max(...historicalGold.map((p) => p.price));
-  const min = Math.min(...historicalGold.map((p) => p.price));
-  const points = historicalGold
-    .map((p, i) => {
-      const x = (i / (historicalGold.length - 1)) * 100;
-      const y = 100 - ((p.price - min) / (max - min)) * 82 - 8;
-      return `${x},${y}`;
-    })
-    .join(" ");
+function MarketChart({ points, currency }: { points: HistoricalGoldPoint[]; currency: "AUD" | "USD" }) {
+  const [activeIndex, setActiveIndex] = useState(points.length - 1);
+  const values = points.map((point) => (currency === "AUD" ? point.audPrice : point.usdPrice));
+  const max = Math.max(...values);
+  const min = Math.min(...values);
+  const span = Math.max(max - min, 1);
+  const coords = points.map((point, index) => {
+    const value = currency === "AUD" ? point.audPrice : point.usdPrice;
+    const x = (index / Math.max(points.length - 1, 1)) * 100;
+    const y = 90 - ((value - min) / span) * 76;
+    return { point, value, x, y };
+  });
+  const line = coords.map(({ x, y }) => `${x},${y}`).join(" ");
+  const active = coords[activeIndex] || coords.at(-1)!;
+  const format = currency === "AUD" ? formatAUD : formatUSD;
+
+  function updateFromPointer(event: PointerEvent<HTMLDivElement>) {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const ratio = Math.min(Math.max((event.clientX - bounds.left) / bounds.width, 0), 1);
+    setActiveIndex(Math.round(ratio * (points.length - 1)));
+  }
+
   return (
-    <div className="chart-wrap">
-      <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-label="Mock historical gold price chart">
-        <polyline points={points} fill="none" stroke="#103D32" strokeWidth="2.5" vectorEffect="non-scaling-stroke" />
+    <div className="chart-wrap" onPointerMove={updateFromPointer} onPointerDown={updateFromPointer}>
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label={`Historical gold price chart in ${currency}`}>
+        {[18, 36, 54, 72].map((y) => (
+          <line key={y} x1="0" x2="100" y1={y} y2={y} className="chart-grid" vectorEffect="non-scaling-stroke" />
+        ))}
+        <polyline points={line} fill="none" className="chart-line" vectorEffect="non-scaling-stroke" />
+        <line x1={active.x} x2={active.x} y1="10" y2="92" className="chart-cursor" vectorEffect="non-scaling-stroke" />
+        <circle cx={active.x} cy={active.y} r="1.6" className="chart-dot" vectorEffect="non-scaling-stroke" />
       </svg>
       <div className="chart-axis">
-        <span>{formatAUD(min)}</span>
-        <span>{formatAUD(max)}</span>
+        <span>{format(max)}</span>
+        <span>{format(min)}</span>
+      </div>
+      <div className="chart-tooltip" style={{ left: `${active.x}%`, top: `${active.y}%` }}>
+        <strong>{format(active.value)} / oz</strong>
+        <span>{active.point.label} · {active.point.time}</span>
       </div>
     </div>
   );
@@ -690,7 +713,7 @@ export function IconicPrototype({ route }: { route: string }) {
       case "product":
         return <ProductDetail product={selectedProduct} market={market} verification={verification} onAdd={addToCart} />;
       case "market":
-        return <MarketPage market={market} currency={currency} setCurrency={setCurrency} />;
+        return <MarketPage market={market} currency={currency} setCurrency={setCurrency} onAdd={addToCart} verification={verification} />;
       case "buy-sell":
         return <BuySellPage market={market} />;
       case "signup":
@@ -1419,61 +1442,224 @@ function ProductDetail({
 function MarketPage({
   market,
   currency,
-  setCurrency
+  setCurrency,
+  onAdd,
+  verification
 }: {
   market: typeof marketSnapshot;
   currency: "AUD" | "USD";
   setCurrency: (currency: "AUD" | "USD") => void;
+  onAdd: (product: BullionProduct) => void;
+  verification: VerificationState;
 }) {
+  const [range, setRange] = useState<MarketRange>("1M");
+  const [pricingStatus, setPricingStatus] = useState<"available" | "unavailable">("available");
+  const [historyStatus, setHistoryStatus] = useState<"available" | "unavailable">("available");
+  const marketStats = marketPriceService.getCurrentGoldPrice(market);
+  const chartPoints = marketPriceService.getHistoricalGoldPrices(range);
+  const currentPrice = currency === "AUD" ? marketStats.currentAud : marketStats.currentUsd;
+  const change = currency === "AUD" ? marketStats.changeAud : marketStats.changeUsd;
+  const format = currency === "AUD" ? formatAUD : formatUSD;
+  const exchangeRate = marketStats.currentUsd / marketStats.currentAud;
+  const dayHigh = currency === "AUD" ? marketStats.dayHighAud : marketStats.dayHighAud * exchangeRate;
+  const dayLow = currency === "AUD" ? marketStats.dayLowAud : marketStats.dayLowAud * exchangeRate;
+  const previousClose = currency === "AUD" ? marketStats.previousCloseAud : marketStats.previousCloseAud * exchangeRate;
+  const pricePerGram = currency === "AUD" ? getGoldPricePerGram(market) : market.usdPerOz / TROY_OUNCE_GRAMS;
+  const featured = products.filter((product) => product.featured && hasPublishedProductImage(product)).slice(0, 4);
+
   return (
-    <section className="page-shell">
-      <div className="market-hero">
+    <section className="page-shell market-page">
+      <section className="market-hero">
         <div>
-          <span className="eyebrow">Live Gold Price</span>
-          <h1>{currency === "AUD" ? `${formatAUD(market.audPerOz)} AUD / oz` : `${formatUSD(market.usdPerOz)} USD / oz`}</h1>
-          <p>Mock market data for prototype demonstration. Last updated {market.lastUpdated}.</p>
+          <span className="eyebrow gold">Live Gold Market</span>
+          <h1>Live Gold Price</h1>
+          <p>Track the current gold price in Australian and US dollars, explore historical movements, and view Iconic Bullion pricing linked to the market.</p>
+          <p className="market-note">Market pricing refreshes approximately every five minutes.</p>
           <div className="segmented">
-            <button className={currency === "AUD" ? "active" : ""} onClick={() => setCurrency("AUD")}>
+            <button className={currency === "AUD" ? "active" : ""} onClick={() => setCurrency("AUD")} aria-pressed={currency === "AUD"}>
               AUD
             </button>
-            <button className={currency === "USD" ? "active" : ""} onClick={() => setCurrency("USD")}>
+            <button className={currency === "USD" ? "active" : ""} onClick={() => setCurrency("USD")} aria-pressed={currency === "USD"}>
               USD
             </button>
           </div>
         </div>
-        <PlaceholderImage src="/images/market/gold-market-hero.jpg" />
-      </div>
-      <div className="panel">
-        <div className="periods">
-          {["1D", "1W", "1M", "3M", "6M", "1Y", "5Y", "MAX"].map((period) => (
-            <button key={period}>{period}</button>
-          ))}
+        <OptimisedImage
+          src="/images/market/live-gold-hero.webp"
+          alt="Investment-grade gold bullion representing the live gold market"
+          className="market-hero-image"
+          priority
+          sizes="(max-width: 900px) 100vw, 58vw"
+          position="center"
+        />
+      </section>
+
+      <section className="market-panel">
+        {pricingStatus === "unavailable" ? (
+          <div className="market-failure">
+            <AlertTriangle size={22} />
+            <div>
+              <h2>Live pricing is temporarily unavailable.</h2>
+              <p>We're unable to retrieve the latest market rate at this time.</p>
+            </div>
+            <div className="split-actions">
+              <PrimaryButton onClick={() => setPricingStatus("available")}>Try Again</PrimaryButton>
+              <PrimaryButton href="bullion" variant="secondary">Browse Bullion</PrimaryButton>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="market-price-head">
+              <div>
+                <span className="eyebrow">Gold Spot Price</span>
+                <h2>{format(currentPrice)} / oz</h2>
+                <p>
+                  <span className="market-open">Live pricing</span> Updated {marketStats.lastUpdated} · approximately 5 min refresh
+                </p>
+              </div>
+              <div className="segmented" aria-label="Currency">
+                <button className={currency === "AUD" ? "active" : ""} onClick={() => setCurrency("AUD")} aria-pressed={currency === "AUD"}>
+                  AUD
+                </button>
+                <button className={currency === "USD" ? "active" : ""} onClick={() => setCurrency("USD")} aria-pressed={currency === "USD"}>
+                  USD
+                </button>
+              </div>
+            </div>
+            <div className="market-stat-grid">
+              <Info label="Current Price" value={`${format(currentPrice)} / oz`} />
+              <Info label="Change" value={`${change >= 0 ? "+" : ""}${format(change)}`} />
+              <Info label="Change %" value={`${marketStats.changePercent >= 0 ? "+" : ""}${marketStats.changePercent.toFixed(2)}%`} />
+              <Info label="Day High" value={format(dayHigh)} />
+              <Info label="Day Low" value={format(dayLow)} />
+              <Info label="Previous Close" value={format(previousClose)} />
+              <Info label="Price / Gram" value={format(pricePerGram)} />
+              <Info label="Last Updated" value={marketStats.lastUpdated} />
+            </div>
+          </>
+        )}
+      </section>
+
+      <section className="panel market-chart-panel">
+        <div className="section-head">
+          <div>
+            <span className="eyebrow">Historical Gold Price</span>
+            <h2>{currency} gold market movement</h2>
+            <p>Prototype historical market data is provider-neutral and can be replaced by the final pricing source.</p>
+          </div>
+          <div className="periods" aria-label="Chart timeframe">
+            {marketRanges.map((period) => (
+              <button key={period} className={range === period ? "active" : ""} onClick={() => setRange(period)} aria-pressed={range === period}>
+                {period}
+              </button>
+            ))}
+          </div>
         </div>
-        <Chart />
-      </div>
-      <div className="table-wrap">
+        {historyStatus === "unavailable" ? (
+          <div className="market-failure compact">
+            <AlertTriangle size={20} />
+            <p>Historical price data is temporarily unavailable.</p>
+            <PrimaryButton onClick={() => setHistoryStatus("available")} variant="secondary">Try Again</PrimaryButton>
+          </div>
+        ) : (
+          <MarketChart points={chartPoints} currency={currency} />
+        )}
+      </section>
+
+      <section className="table-wrap market-history-table" aria-label="Historical gold prices">
         <table>
           <thead>
             <tr>
               <th>Date</th>
               <th>Time</th>
-              <th>Price</th>
+              <th>AUD / oz</th>
+              <th>USD / oz</th>
+              <th>Change</th>
               <th>Currency</th>
             </tr>
           </thead>
           <tbody>
-            {historicalGold.slice(-8).map((point) => (
+            {chartPoints.slice(-8).map((point, index, rows) => {
+              const previous = rows[index - 1]?.audPrice ?? point.audPrice;
+              const rowChange = point.audPrice - previous;
+              return (
               <tr key={point.label}>
                 <td>{point.label}</td>
-                <td>10:35 AM</td>
-                <td>{formatAUD(point.price)}</td>
-                <td>AUD</td>
+                <td>{point.time}</td>
+                <td>{formatAUD(point.audPrice)}</td>
+                <td>{formatUSD(point.usdPrice)}</td>
+                <td>{index === 0 ? "—" : `${rowChange >= 0 ? "+" : ""}${formatAUD(rowChange)}`}</td>
+                <td>{currency}</td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
-      </div>
-      <PrimaryButton href="bullion">Browse Bullion</PrimaryButton>
+      </section>
+
+      <section className="detail-feature market-trust-section">
+        <OptimisedImage
+          src="/images/market/market-trust.webp"
+          alt="Investment-grade gold bullion arranged for professional precious-metals trading"
+          sizes="(max-width: 900px) 100vw, 50vw"
+        />
+        <div>
+          <span className="eyebrow gold">Market Trust</span>
+          <h2>Market-linked. Physical bullion.</h2>
+          <p>Iconic Bullion pricing is designed around the prevailing gold market rate, with product-specific pricing applied transparently to each bullion product.</p>
+          <div className="market-point-list">
+            {[
+              ["Market-linked pricing", "Bullion prices move with the underlying gold market."],
+              ["5-minute refresh", "Displayed bullion prices update approximately every five minutes."],
+              ["Product-specific pricing", "Each bullion product may carry its own pricing adjustment."],
+              ["10-minute cart lock", "Once added to cart, the displayed bullion price is temporarily locked for 10 minutes."]
+            ].map(([title, body]) => (
+              <article key={title}>
+                <h3>{title}</h3>
+                <p>{body}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="pricing-explainer market-pricing-flow">
+        <div>
+          <h2>How bullion pricing works.</h2>
+          <p>Spot gold is the underlying market reference. Bullion product prices are market-linked selling prices for finished products.</p>
+        </div>
+        <div className="pricing-steps">
+          {[
+            ["Live Gold Market", "Underlying gold market reference"],
+            ["Product-Specific Pricing", "Format, weight and product pricing applied"],
+            ["Your Bullion Price", "Displayed customer price in AUD"]
+          ].map(([title, body], index) => (
+            <article key={title}>
+              <span>{title}</span>
+              <p>{body}</p>
+              {index < 2 && <strong aria-hidden="true">→</strong>}
+            </article>
+          ))}
+        </div>
+        <PrimaryButton href="bullion">Shop Bullion</PrimaryButton>
+      </section>
+
+      <section className="market-cta-band">
+        <div>
+          <span className="eyebrow">Buy / Sell Pricing</span>
+          <h2>Looking for current bullion buy and sell pricing?</h2>
+        </div>
+        <PrimaryButton href="buy-sell" variant="secondary">View Buy / Sell Prices</PrimaryButton>
+      </section>
+
+      <section className="detail-section">
+        <SectionHead eyebrow="Market-linked Products" title="Shop at today's market-linked prices" />
+        <div className="product-grid">
+          {featured.map((product) => (
+            <ProductCard key={product.id} product={product} market={market} onAdd={onAdd} verification={verification} />
+          ))}
+        </div>
+      </section>
     </section>
   );
 }
