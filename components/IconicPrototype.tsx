@@ -2605,9 +2605,149 @@ function Dashboard({ verification, setVerification }: { verification: Verificati
 }
 
 function OrderHistory({ embedded }: { embedded?: boolean }) {
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<"all" | "pending" | "paid">("all");
+  const totalSpend = mockOrders.reduce((sum, order) => sum + order.amount, 0);
+  const pendingOrders = mockOrders.filter((order) => order.payment.includes("Pending")).length;
+  const filteredOrders = mockOrders.filter((order) => {
+    const matchesQuery = [order.orderNo, order.invoiceNo, order.products, order.payment, order.fulfilment].join(" ").toLowerCase().includes(query.toLowerCase());
+    const matchesFilter = filter === "all" || (filter === "pending" ? order.payment.includes("Pending") : order.payment === "Paid");
+    return matchesQuery && matchesFilter;
+  });
+  const navItems = [
+    ["Overview", "account"],
+    ["Orders", "account/orders"],
+    ["Invoices", "invoice"],
+    ["Verification", "verification"],
+    ["Certificates", "certificate"],
+    ["Profile", "account"]
+  ];
+  const orderImage = (productsLabel: string) => (productsLabel.includes("PAMP") ? "/images/products/premium-1g.webp" : "/images/products/iconic-10g.webp");
+  const content = (
+    <>
+      {!embedded && (
+        <div className="orders-hero">
+          <div>
+            <span className="eyebrow">Orders</span>
+            <h1>Order history</h1>
+            <p>Track bullion orders, payment status, fulfilment progress and invoice records in one secure account view.</p>
+          </div>
+          <div className="orders-hero-actions">
+            <PrimaryButton href="bullion">Shop Bullion</PrimaryButton>
+            <PrimaryButton href="invoice" variant="secondary">Latest Invoice</PrimaryButton>
+          </div>
+        </div>
+      )}
+      <div className="orders-summary-grid">
+        <article>
+          <span>Total Orders</span>
+          <strong>{mockOrders.length}</strong>
+          <small>Across this account</small>
+        </article>
+        <article>
+          <span>Total Value</span>
+          <strong>{formatAUD(totalSpend)}</strong>
+          <small>Prototype order value</small>
+        </article>
+        <article>
+          <span>Pending Payment</span>
+          <strong>{pendingOrders}</strong>
+          <small>Awaiting bank transfer</small>
+        </article>
+      </div>
+      <div className="orders-toolbar">
+        <label className="orders-search">
+          <Search size={18} />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search orders, invoices or products" />
+        </label>
+        <div className="orders-filters" aria-label="Order filters">
+          {[
+            ["all", "All"],
+            ["pending", "Pending"],
+            ["paid", "Paid"]
+          ].map(([id, label]) => (
+            <button key={id} className={filter === id ? "active" : ""} type="button" onClick={() => setFilter(id as typeof filter)}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="table-wrap orders-table-wrap">
+        <table className="orders-table enhanced">
+          <thead>
+            <tr>
+              <th>Order</th>
+              <th>Product</th>
+              <th>Amount</th>
+              <th>Payment</th>
+              <th>Fulfilment</th>
+              <th>Invoice</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredOrders.map((order) => (
+              <tr key={order.orderNo}>
+                <td data-label="Order">
+                  <Link href="/order-detail" className="order-number">{order.orderNo}</Link>
+                  <small>{order.date}</small>
+                </td>
+                <td data-label="Product">
+                  <div className="order-product">
+                    <ProductMedia src={orderImage(order.products)} alt={order.products} className="order-product-image" />
+                    <span>
+                      <strong>{order.products}</strong>
+                      <small>Physical gold bullion</small>
+                    </span>
+                  </div>
+                </td>
+                <td data-label="Amount" className="order-amount">{formatAUD(order.amount)}</td>
+                <td data-label="Payment">
+                  <StatusPill tone={order.payment.includes("Pending") ? "gold" : "green"}>{order.payment}</StatusPill>
+                </td>
+                <td data-label="Fulfilment">
+                  <span className="fulfilment-chip">
+                    {order.fulfilment === "Store Pickup" ? <PackageCheck size={16} /> : <Check size={16} />}
+                    {order.fulfilment}
+                  </span>
+                </td>
+                <td data-label="Invoice">
+                  <Link href="/invoice" className="invoice-link">{order.invoiceNo}</Link>
+                </td>
+                <td data-label="Action">
+                  <div className="order-actions">
+                    <Link className="table-action" href="/order-detail">View Order</Link>
+                    <Link className="invoice-download" href="/invoice" aria-label={`View invoice ${order.invoiceNo}`}>
+                      <Download size={15} />
+                    </Link>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {filteredOrders.length === 0 && (
+          <div className="orders-empty">
+            <FileText />
+            <strong>No matching orders</strong>
+            <p>Adjust your search or filter to view your bullion order records.</p>
+          </div>
+        )}
+      </div>
+    </>
+  );
+
   return (
-    <section className={embedded ? "panel order-history-panel" : "page-shell"}>
-      {!embedded && <SectionHead eyebrow="Orders" title="Order history" />}
+    <section className={embedded ? "panel order-history-panel" : "orders-page dashboard"}>
+      {!embedded && (
+        <aside className="account-nav">
+          {navItems.map(([label, route]) => (
+            <Link key={`${label}-${route}`} href={href(route)} className={route === "account/orders" ? "active" : undefined}>
+              {label}
+            </Link>
+          ))}
+        </aside>
+      )}
       {embedded && (
         <div className="panel-head">
           <div>
@@ -2617,46 +2757,7 @@ function OrderHistory({ embedded }: { embedded?: boolean }) {
           <Link href="/account/orders">View all orders →</Link>
         </div>
       )}
-      <div className="table-wrap">
-        <table className="orders-table">
-          <thead>
-            <tr>
-              <th>Order #</th>
-              <th>Date</th>
-              <th>Products</th>
-              <th>Amount</th>
-              <th>Payment</th>
-              <th>Fulfilment</th>
-              <th>Invoice</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {mockOrders.map((order) => (
-              <tr key={order.orderNo}>
-                <td data-label="Order #">
-                  <Link href="/order-detail">{order.orderNo}</Link>
-                </td>
-                <td data-label="Date">{order.date}</td>
-                <td data-label="Products">{order.products}</td>
-                <td data-label="Amount">{formatAUD(order.amount)}</td>
-                <td data-label="Payment">
-                  <StatusPill tone={order.payment.includes("Pending") ? "gold" : "green"}>{order.payment}</StatusPill>
-                </td>
-                <td data-label="Fulfilment">{order.fulfilment}</td>
-                <td data-label="Invoice">
-                  <Link href="/invoice">{order.invoiceNo}</Link>
-                </td>
-                <td data-label="Action">
-                  <Link className="table-action" href="/order-detail">
-                    View Order
-                  </Link>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <div className={embedded ? undefined : "orders-main"}>{content}</div>
     </section>
   );
 }

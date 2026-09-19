@@ -39,6 +39,21 @@ final result: passed
 
 ---
 
+**Order History Page QA**
+- Source visual: `/var/folders/jq/p0ttr61j475746h5f8g4zvz80000gn/T/codex-clipboard-0b2e2a29-6c23-4027-b895-e86eb0256483.png`
+- Implementation route checked: `/account/orders/`
+- Browser evidence: in-app browser on `http://127.0.0.1:3000/account/orders/`
+
+**Order History Findings**
+- No remaining P0/P1/P2 issues found.
+- Rebuilt the page from a sparse table into a complete account view with section hero, account navigation, status summary cards, search, filters, product thumbnails, invoice shortcuts, and an empty state.
+- Verified search returns the matching PAMP order, pending and paid filters return the expected records after clearing search, and product images load.
+- Verified the enhanced order table fits the account content width without an internal horizontal scrollbar at the checked desktop viewport.
+
+final result: passed
+
+---
+
 **KYC Verification Flow QA**
 - Source visuals: `/Users/amankumarsingh/Downloads/Iconic Bullion Images/KYC Verification/*.png`
 - Implementation routes checked: `/verification/`, `/verification-pending/`, `/verification-approved/`, `/verification-declined/`
