@@ -2789,10 +2789,24 @@ function OrderDetail() {
 }
 
 function InvoicePage({ lines, totals, fulfilment }: { lines: Array<CartLine & { product: BullionProduct }>; totals: { subtotal: number; deliveryFee: number; total: number }; fulfilment: Fulfilment }) {
-  const invoiceLines = lines.length
-    ? lines
-    : [{ product: products[2], quantity: 1, lockedPrice: calculateProductBullionPrice(products[2], marketSnapshot), productId: products[2].id, lockedAt: Date.now() }];
-  const fallbackTotals = lines.length ? totals : calculateCartLockedPrice(invoiceLines, fulfilment === "delivery" ? 35 : 0);
+  void lines;
+  void totals;
+  void fulfilment;
+  const invoiceProduct = products.find((product) => product.id === "iconic-10g") ?? products[2];
+  const invoiceLines = [{ product: invoiceProduct, quantity: 1, lockedPrice: calculateProductBullionPrice(invoiceProduct, marketSnapshot), productId: invoiceProduct.id, lockedAt: Date.now() }];
+  const fallbackTotals = calculateCartLockedPrice(invoiceLines, 0);
+  const invoiceStatus = "Pending for Payment";
+  const invoiceMeta = [
+    ["Order #", "IB-10472"],
+    ["Issue Date", "18 September 2026"],
+    ["Customer", "Avery Morgan"],
+    ["Customer Code", "CUST-00492"]
+  ];
+  const paymentSteps = [
+    "Use the reference IB-10472 with your transfer",
+    "Funds are matched manually by Iconic Bullion",
+    "Pickup details are released after payment clears"
+  ];
   return (
     <section className="page-shell invoice-shell">
       <div className="invoice">
@@ -2800,55 +2814,103 @@ function InvoicePage({ lines, totals, fulfilment }: { lines: Array<CartLine & { 
           <div>
             <span className="eyebrow">ICONIC BULLION</span>
             <h1>Invoice INV-2026-0188</h1>
+            <p>Payment reference, locked price and fulfilment details for your bullion order.</p>
           </div>
-          <StatusPill tone="gold">Pending for Payment</StatusPill>
+          <div className="invoice-head-actions no-print">
+            <StatusPill tone="gold">{invoiceStatus}</StatusPill>
+            <button className="btn primary" onClick={() => window.print()}>
+              <Printer size={17} /> Print
+            </button>
+            <button className="btn secondary">
+              <Download size={17} /> Download
+            </button>
+          </div>
         </div>
-        <div className="spec-grid">
-          <Info label="Order #" value="IB-10472" />
-          <Info label="Issue Date" value="18 September 2026" />
-          <Info label="Customer" value="Avery Morgan" />
-          <Info label="Customer Code" value="CUST-00492" />
+        <div className="invoice-status-strip">
+          <article>
+            <Clock size={18} />
+            <span>Payment Due</span>
+            <strong>Bank transfer pending</strong>
+          </article>
+          <article>
+            <ShieldCheck size={18} />
+            <span>Price Lock</span>
+            <strong>{formatAUD(fallbackTotals.total)}</strong>
+          </article>
+          <article>
+            <PackageCheck size={18} />
+            <span>Fulfilment</span>
+            <strong>Store Pickup</strong>
+          </article>
         </div>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Product</th>
-                <th>Weight</th>
-                <th>Qty</th>
-                <th>Locked Price</th>
-                <th>Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {invoiceLines.map((line) => (
-                <tr key={line.productId}>
-                  <td>
-                    {line.product.brand} {line.product.name}
-                  </td>
-                  <td>{line.product.weightLabel}</td>
-                  <td>{line.quantity}</td>
-                  <td>{formatAUD(line.lockedPrice)}</td>
-                  <td>{formatAUD(line.lockedPrice * line.quantity)}</td>
-                </tr>
+        <div className="invoice-meta-grid">
+          {invoiceMeta.map(([label, value]) => (
+            <Info key={label} label={label} value={value} />
+          ))}
+        </div>
+        <div className="invoice-body">
+          <div className="invoice-line-items">
+            <div className="invoice-section-head">
+              <div>
+                <span className="eyebrow">Locked Bullion</span>
+                <h2>Order items</h2>
+              </div>
+              <Link href="/order-detail">View order</Link>
+            </div>
+            <div className="table-wrap invoice-table-wrap">
+              <table className="invoice-table">
+                <thead>
+                  <tr>
+                    <th>Product</th>
+                    <th>Weight</th>
+                    <th>Qty</th>
+                    <th>Locked Price</th>
+                    <th>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {invoiceLines.map((line) => (
+                    <tr key={line.productId}>
+                      <td data-label="Product">
+                        <div className="invoice-product">
+                          <ProductMedia src={line.product.image} alt={`${line.product.brand} ${line.product.name}`} className="invoice-product-image" />
+                          <span>
+                            <strong>{line.product.brand} {line.product.name}</strong>
+                            <small>Physical gold bullion · 999.9</small>
+                          </span>
+                        </div>
+                      </td>
+                      <td data-label="Weight">{line.product.weightLabel}</td>
+                      <td data-label="Qty">{line.quantity}</td>
+                      <td data-label="Locked Price">{formatAUD(line.lockedPrice)}</td>
+                      <td data-label="Total" className="invoice-line-total">{formatAUD(line.lockedPrice * line.quantity)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="invoice-note">
+              <FileText size={18} />
+              <p>This invoice records the locked bullion price at order creation. Bullion is released after payment is matched to the order reference.</p>
+            </div>
+          </div>
+          <aside className="invoice-total">
+            <div className="invoice-total-head">
+              <span>Amount Due</span>
+              <strong>{formatAUD(fallbackTotals.total)}</strong>
+              <small>{invoiceStatus}</small>
+            </div>
+            <Info label="Market gold price" value={`${formatAUD(marketSnapshot.audPerOz)} AUD / oz · ${formatUSD(marketSnapshot.usdPerOz)} USD / oz`} />
+            <Info label="Delivery / Insurance" value={fallbackTotals.deliveryFee ? formatAUD(fallbackTotals.deliveryFee) : "Free Store Pickup"} />
+            <Info label="Payment Method" value="Bank Transfer" />
+            <Info label="Bank Details" value="Placeholder BSB / Account / Reference IB-10472" />
+            <div className="invoice-payment-steps">
+              <span className="eyebrow">Next Steps</span>
+              {paymentSteps.map((step) => (
+                <p key={step}><Check size={15} /> {step}</p>
               ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="invoice-total">
-          <Info label="Market gold price" value={`${formatAUD(marketSnapshot.audPerOz)} AUD / oz · ${formatUSD(marketSnapshot.usdPerOz)} USD / oz`} />
-          <Info label="Delivery / Insurance" value={fallbackTotals.deliveryFee ? formatAUD(fallbackTotals.deliveryFee) : "Free Store Pickup"} />
-          <Info label="Grand Total" value={formatAUD(fallbackTotals.total)} />
-          <Info label="Payment Method" value="Bank Transfer" />
-          <Info label="Bank Details" value="Placeholder BSB / Account / Reference IB-10472" />
-        </div>
-        <div className="split-actions no-print">
-          <button className="btn primary" onClick={() => window.print()}>
-            <Printer size={17} /> Print Invoice
-          </button>
-          <button className="btn secondary">
-            <Download size={17} /> Download Invoice
-          </button>
+            </div>
+          </aside>
         </div>
       </div>
     </section>

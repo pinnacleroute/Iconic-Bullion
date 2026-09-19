@@ -39,6 +39,21 @@ final result: passed
 
 ---
 
+**Invoice Page QA**
+- Source visual: `/var/folders/jq/p0ttr61j475746h5f8g4zvz80000gn/T/codex-clipboard-59201b36-5d35-4a8a-ad0f-98e5f43f04dd.png`
+- Implementation route checked: `/invoice/`
+- Browser evidence: in-app browser on `http://127.0.0.1:3000/invoice/`
+
+**Invoice Findings**
+- No remaining P0/P1/P2 issues found.
+- Rebuilt the invoice from a sparse document into a task-focused payment view with a stronger header, print/download controls, payment status cards, stable invoice metadata, product imagery, amount-due summary, bank-transfer details, and next steps.
+- Stabilized `/invoice/` around invoice `INV-2026-0188` so it does not drift based on current cart contents.
+- Verified the invoice displays the intended 10g product, `$2,239.96` amount due, Store Pickup fulfilment, loaded product imagery, and no table or body overflow at the checked desktop viewport.
+
+final result: passed
+
+---
+
 **Order History Page QA**
 - Source visual: `/var/folders/jq/p0ttr61j475746h5f8g4zvz80000gn/T/codex-clipboard-0b2e2a29-6c23-4027-b895-e86eb0256483.png`
 - Implementation route checked: `/account/orders/`
