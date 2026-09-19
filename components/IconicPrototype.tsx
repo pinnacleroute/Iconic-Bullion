@@ -109,6 +109,15 @@ const validRoutes = new Set([
   "delivery-status"
 ]);
 
+const accountNavItems = [
+  ["Overview", "account"],
+  ["Orders", "account/orders"],
+  ["Invoices", "invoice"],
+  ["Verification", "verification"],
+  ["Certificates", "certificate"],
+  ["Profile", "account"]
+] as const;
+
 function href(route: string) {
   return route === "home" ? "/" : `/${route}`;
 }
@@ -119,6 +128,27 @@ function cx(...classes: Array<string | false | undefined>) {
 
 function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function AccountNav({ active }: { active: string }) {
+  return (
+    <aside className="account-nav">
+      {accountNavItems.map(([label, route]) => (
+        <Link key={`${label}-${route}`} href={href(route)} className={route === active ? "active" : undefined}>
+          {label}
+        </Link>
+      ))}
+    </aside>
+  );
+}
+
+function AccountShell({ active, className, children }: { active: string; className?: string; children: React.ReactNode }) {
+  return (
+    <section className={cx("dashboard account-shell", className)}>
+      <AccountNav active={active} />
+      <div className="dashboard-main account-main">{children}</div>
+    </section>
+  );
 }
 
 function useStoredState<T>(key: string, initial: T) {
@@ -786,7 +816,11 @@ export function IconicPrototype({ route }: { route: string }) {
       case "serial-verification":
         return <SerialPage serial={serial} setSerial={setSerial} />;
       case "certificate":
-        return <CertificatePanel printable />;
+        return (
+          <AccountShell active="certificate" className="certificate-account">
+            <CertificatePanel printable />
+          </AccountShell>
+        );
       case "wholesale":
         return <WholesalePage />;
       case "about":
@@ -2059,6 +2093,7 @@ function VerificationPage({
   }
 
   return (
+    <AccountShell active="verification" className="verification-account">
     <section className="kyc-page">
       <div className="kyc-hero">
         <div className="kyc-hero-copy">
@@ -2214,6 +2249,7 @@ function VerificationPage({
         </div>
       )}
     </section>
+    </AccountShell>
   );
 }
 
@@ -2506,25 +2542,8 @@ function Dashboard({ verification, setVerification }: { verification: Verificati
       href: "login"
     }
   }[verification];
-  const navItems = [
-    ["Overview", "account"],
-    ["Orders", "account/orders"],
-    ["Invoices", "invoice"],
-    ["Verification", "verification"],
-    ["Certificates", "certificate"],
-    ["Profile", "account"]
-  ];
-
   return (
-    <section className="dashboard">
-      <aside className="account-nav">
-        {navItems.map(([label, route], index) => (
-          <Link key={`${label}-${route}`} href={href(route)} className={index === 0 ? "active" : undefined}>
-            {label}
-          </Link>
-        ))}
-      </aside>
-      <div className="dashboard-main">
+    <AccountShell active="account">
         <SectionHead eyebrow="Account" title="Welcome back" subtitle="Manage your verification, orders, invoices and bullion certificates." />
         <div className="dashboard-summary-grid">
           <article className="dashboard-summary-card">
@@ -2599,8 +2618,7 @@ function Dashboard({ verification, setVerification }: { verification: Verificati
             View Invoices
           </PrimaryButton>
         </section>
-      </div>
-    </section>
+    </AccountShell>
   );
 }
 
@@ -2614,14 +2632,6 @@ function OrderHistory({ embedded }: { embedded?: boolean }) {
     const matchesFilter = filter === "all" || (filter === "pending" ? order.payment.includes("Pending") : order.payment === "Paid");
     return matchesQuery && matchesFilter;
   });
-  const navItems = [
-    ["Overview", "account"],
-    ["Orders", "account/orders"],
-    ["Invoices", "invoice"],
-    ["Verification", "verification"],
-    ["Certificates", "certificate"],
-    ["Profile", "account"]
-  ];
   const orderImage = (productsLabel: string) => (productsLabel.includes("PAMP") ? "/images/products/premium-1g.webp" : "/images/products/iconic-10g.webp");
   const content = (
     <>
@@ -2738,16 +2748,8 @@ function OrderHistory({ embedded }: { embedded?: boolean }) {
   );
 
   return (
-    <section className={embedded ? "panel order-history-panel" : "orders-page dashboard"}>
-      {!embedded && (
-        <aside className="account-nav">
-          {navItems.map(([label, route]) => (
-            <Link key={`${label}-${route}`} href={href(route)} className={route === "account/orders" ? "active" : undefined}>
-              {label}
-            </Link>
-          ))}
-        </aside>
-      )}
+    embedded ? (
+    <section className="panel order-history-panel">
       {embedded && (
         <div className="panel-head">
           <div>
@@ -2757,8 +2759,13 @@ function OrderHistory({ embedded }: { embedded?: boolean }) {
           <Link href="/account/orders">View all orders →</Link>
         </div>
       )}
-      <div className={embedded ? undefined : "orders-main"}>{content}</div>
+      <div>{content}</div>
     </section>
+    ) : (
+      <AccountShell active="account/orders" className="orders-page">
+        <div className="orders-main">{content}</div>
+      </AccountShell>
+    )
   );
 }
 
@@ -2808,7 +2815,8 @@ function InvoicePage({ lines, totals, fulfilment }: { lines: Array<CartLine & { 
     "Pickup details are released after payment clears"
   ];
   return (
-    <section className="page-shell invoice-shell">
+    <AccountShell active="invoice" className="invoice-account">
+    <section className="invoice-shell">
       <div className="invoice">
         <div className="invoice-head">
           <div>
@@ -2914,6 +2922,7 @@ function InvoicePage({ lines, totals, fulfilment }: { lines: Array<CartLine & { 
         </div>
       </div>
     </section>
+    </AccountShell>
   );
 }
 
@@ -3109,6 +3118,7 @@ function VerificationStatusPage({ tone, setVerification }: { tone: "pending" | "
   }, [setVerification, tone]);
 
   return (
+    <AccountShell active="verification" className="verification-account">
     <section className={cx("verification-status-page", tone)}>
       <div className="verification-status-copy">
         <span className="eyebrow">{content.eyebrow}</span>
@@ -3126,6 +3136,7 @@ function VerificationStatusPage({ tone, setVerification }: { tone: "pending" | "
       </div>
       <OptimisedImage src={content.image} alt={content.alt} className="verification-status-image" priority sizes="(max-width: 900px) 100vw, 50vw" />
     </section>
+    </AccountShell>
   );
 }
 

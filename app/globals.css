@@ -1206,6 +1206,25 @@ p {
   gap: 28px;
 }
 
+.account-shell {
+  align-items: start;
+}
+
+.account-main {
+  min-width: 0;
+}
+
+.account-shell .invoice-shell,
+.account-shell .kyc-page,
+.account-shell .verification-status-page {
+  padding: 0;
+  background: transparent;
+}
+
+.account-shell .certificate {
+  width: 100%;
+}
+
 .account-nav {
   align-content: start;
   gap: 6px;
@@ -5084,13 +5103,15 @@ th {
 
   .site-header,
   .footer,
+  .account-nav,
   .no-print,
   .btn {
     display: none !important;
   }
 
   .page-shell,
-  .invoice-shell {
+  .invoice-shell,
+  .account-shell {
     max-width: none;
     padding: 0;
   }
