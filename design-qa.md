@@ -39,6 +39,21 @@ final result: passed
 
 ---
 
+**Bullion Listing Filter And Sort QA**
+- Source visual: `/var/folders/jq/p0ttr61j475746h5f8g4zvz80000gn/T/codex-clipboard-f77d5e2c-0e26-40e4-8a9f-e43ff1f8ff81.png`
+- Implementation route checked: `/bullion/`
+- Browser evidence: in-app browser on `http://127.0.0.1:3000/bullion/`
+
+**Bullion Listing Findings**
+- No remaining P0/P1/P2 issues found.
+- Updated the bullion listing to use a modern left filter rail with checkbox-style groups, clear-all action, compact search, active filter chips, product count summary, grid/list view toggle, and a sleek sort control.
+- Refined listing product cards for a cleaner commerce-grid look with isolated image framing, compact product metadata, muted status badges, and subdued buy/verify buttons.
+- Verified checkbox filters, search, active chips, list/grid toggle, sort select, reset action, product image loading, and no horizontal overflow at the checked desktop viewport.
+
+final result: passed
+
+---
+
 **Invoice Page QA**
 - Source visual: `/var/folders/jq/p0ttr61j475746h5f8g4zvz80000gn/T/codex-clipboard-59201b36-5d35-4a8a-ad0f-98e5f43f04dd.png`
 - Implementation route checked: `/invoice/`

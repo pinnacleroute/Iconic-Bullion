@@ -18,6 +18,7 @@ import {
   EyeOff,
   FileText,
   Filter,
+  LayoutGrid,
   Lock,
   Menu,
   PackageCheck,
@@ -441,7 +442,8 @@ function ProductCard({
   compact,
   showcase = false,
   displayPrice,
-  market = marketSnapshot
+  market = marketSnapshot,
+  className
 }: {
   product: BullionProduct;
   onAdd: (product: BullionProduct) => void;
@@ -450,11 +452,12 @@ function ProductCard({
   showcase?: boolean;
   displayPrice?: string;
   market?: typeof marketSnapshot;
+  className?: string;
 }) {
   const price = calculateProductBullionPrice(product, market);
   const disabled = product.availability === "Out of Stock" || product.availability === "Coming Soon";
   return (
-    <article className={cx("product-card", compact && "compact", showcase && "showcase")}>
+    <article className={cx("product-card", compact && "compact", showcase && "showcase", className)}>
       <Link href={`/product?id=${product.id}`} aria-label={`View ${product.brand} ${product.name}`}>
         <ProductMedia src={product.image} alt={`${product.brand} ${product.name}`} />
       </Link>
@@ -1184,11 +1187,43 @@ function Listing({
   onAdd: (product: BullionProduct) => void;
   verification: VerificationState;
 }) {
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const brandOptions = ["All", "Iconic Bullion", "Aurelia Reserve", "PAMP Suisse", "Emirates Gold", "Generic", "ABC / Placeholder Brand"];
   const weightOptions = ["All", "1g", "2.5g", "5g", "10g", "20g", "1oz / 31.1g", "50g", "100g", "250g", "500g", "1kg"];
+  const selectedFilters = [brand, productType, weight, availability].filter((option) => option !== "All");
+  const resetFilters = () => {
+    setQuery("");
+    setBrand("All");
+    setProductType("All");
+    setWeight("All");
+    setAvailability("All");
+  };
+  const FilterGroup = ({
+    title,
+    value,
+    options,
+    onChange
+  }: {
+    title: string;
+    value: string;
+    options: string[];
+    onChange: (value: string) => void;
+  }) => (
+    <div className="filter-group">
+      <span>{title}</span>
+      <div>
+        {options.map((option) => (
+          <label key={`${title}-${option}`} className="check-filter">
+            <input type="checkbox" checked={value === option} onChange={() => onChange(value === option ? "All" : option)} />
+            <span>{option}</span>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
 
   return (
-    <section className="page-shell">
+    <section className="page-shell bullion-listing-page">
       <SectionHead
         eyebrow="Investment Gold"
         title="Bullion"
@@ -1201,71 +1236,69 @@ function Listing({
       </div>
       <div className="catalogue">
         <aside className="filters">
-          <h2>
-            <Filter size={18} /> Filters
-          </h2>
-          <label>
-            Search
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search bullion products" />
-          </label>
-          <label>
-            Brand
-            <select value={brand} onChange={(event) => setBrand(event.target.value)}>
-              {brandOptions.map((option) => (
-                <option key={option}>{option}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Type
-            <select value={productType} onChange={(event) => setProductType(event.target.value)}>
-              <option>All</option>
-              <option>Minted Bars</option>
-              <option>Cast Bars</option>
-            </select>
-          </label>
-          <label>
-            Weight
-            <select value={weight} onChange={(event) => setWeight(event.target.value)}>
-              {weightOptions.map((option) => (
-                <option key={option}>{option}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Availability
-            <select value={availability} onChange={(event) => setAvailability(event.target.value)}>
-              {["All", "In Stock", "Low Stock", "Out of Stock", "Coming Soon"].map((option) => (
-                <option key={option}>{option}</option>
-              ))}
-            </select>
-          </label>
-          <PrimaryButton
-            variant="ghost"
-            onClick={() => {
-              setQuery("");
-              setBrand("All");
-              setProductType("All");
-              setWeight("All");
-              setAvailability("All");
-            }}
-          >
-            Reset Filters
-          </PrimaryButton>
-        </aside>
-        <div>
-          <div className="toolbar">
-            <span>{products.length} bullion products</span>
-            <select value={sort} onChange={(event) => setSort(event.target.value)} aria-label="Sort products">
-              {["Featured", "Price Low to High", "Price High to Low", "Weight Low to High", "Weight High to Low"].map((option) => (
-                <option key={option}>{option}</option>
-              ))}
-            </select>
+          <div className="filters-head">
+            <h2>
+              <Filter size={17} /> Filter
+            </h2>
+            <button type="button" onClick={resetFilters}>Clear all</button>
           </div>
+          <label className="filter-search">
+            <Search size={16} />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search bullion" />
+          </label>
+          <FilterGroup title="Product Type" value={productType} options={["Minted Bars", "Cast Bars"]} onChange={setProductType} />
+          <FilterGroup title="Manufacturer" value={brand} options={brandOptions.filter((option) => option !== "All")} onChange={setBrand} />
+          <FilterGroup title="Weight" value={weight} options={weightOptions.filter((option) => option !== "All").slice(0, 8)} onChange={setWeight} />
+          <FilterGroup title="Availability" value={availability} options={["In Stock", "Low Stock", "Out of Stock", "Coming Soon"]} onChange={setAvailability} />
+        </aside>
+        <div className="catalogue-results">
+          <div className="catalogue-toolbar">
+            <div>
+              <span>{products.length} products</span>
+              <strong>{selectedFilters.length ? selectedFilters.join(" · ") : "All bullion"}</strong>
+            </div>
+            <div className="listing-controls">
+              <div className="view-toggle" aria-label="Product view">
+                <button type="button" className={viewMode === "grid" ? "active" : undefined} onClick={() => setViewMode("grid")} aria-label="Grid view">
+                  <LayoutGrid size={15} />
+                </button>
+                <button type="button" className={viewMode === "list" ? "active" : undefined} onClick={() => setViewMode("list")} aria-label="List view">
+                  <Menu size={15} />
+                </button>
+              </div>
+              <label className="sort-menu">
+                <span>Sort by</span>
+                <select value={sort} onChange={(event) => setSort(event.target.value)} aria-label="Sort products">
+                  {["Featured", "Price Low to High", "Price High to Low", "Weight Low to High", "Weight High to Low"].map((option) => (
+                    <option key={option}>{option}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </div>
+          {(query || selectedFilters.length > 0) && (
+            <div className="active-filter-row">
+              {query && <button type="button" onClick={() => setQuery("")}>Search: {query} ×</button>}
+              {selectedFilters.map((filter) => (
+                <button
+                  type="button"
+                  key={filter}
+                  onClick={() => {
+                    if (filter === brand) setBrand("All");
+                    if (filter === productType) setProductType("All");
+                    if (filter === weight) setWeight("All");
+                    if (filter === availability) setAvailability("All");
+                  }}
+                >
+                  {filter} ×
+                </button>
+              ))}
+            </div>
+          )}
           {products.length ? (
-            <div className="product-grid">
+            <div className={cx("product-grid listing-product-grid", viewMode === "list" && "list-view")}>
               {products.map((product) => (
-                <ProductCard key={product.id} product={product} market={market} onAdd={onAdd} verification={verification} />
+                <ProductCard key={product.id} product={product} market={market} onAdd={onAdd} verification={verification} className="listing-product-card" />
               ))}
             </div>
           ) : (
