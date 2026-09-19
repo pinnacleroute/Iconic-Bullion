@@ -26,6 +26,7 @@ import {
   ShieldCheck,
   ShoppingBag,
   Truck,
+  UploadCloud,
   UserRound,
   X
 } from "lucide-react";
@@ -46,8 +47,19 @@ type VerificationState = "logged-out" | "unverified" | "pending" | "approved" | 
 type AccountType = "individual" | "company";
 type CartLine = { productId: string; quantity: number; lockedPrice: number; lockedAt: number };
 type Fulfilment = "pickup" | "delivery";
+type KycStep = "overview" | "details" | "documents" | "review";
+type KycDocumentMeta = { id: string; label: string; name: string; size: number; status: "uploaded" };
 
 const memoryStore = new Map<string, string>();
+const KYC_UPLOAD_CONFIG = {
+  maxBytes: 10 * 1024 * 1024,
+  acceptedTypes: ["application/pdf", "image/jpeg", "image/png"],
+  acceptedExtensions: "PDF, JPG, JPEG or PNG"
+};
+const KYC_DOCUMENT_REQUIREMENTS: Record<AccountType, string[]> = {
+  individual: ["Identity document", "Proof of address if required"],
+  company: ["Company registration document", "Representative identity document"]
+};
 
 const validRoutes = new Set([
   "home",
@@ -2002,57 +2014,205 @@ function VerificationPage({
   verification: VerificationState;
   setVerification: (state: VerificationState) => void;
 }) {
-  const steps = ["Account Details", "Identity / Company Information", "Document Upload", "Verification", "Review", "Status"];
+  const [step, setStep] = useState<KycStep>("overview");
+  const [documents, setDocuments] = useState<KycDocumentMeta[]>([]);
+  const [uploadError, setUploadError] = useState("");
+  const [accepted, setAccepted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const isCompany = accountType === "company";
+  const documentRequirements = KYC_DOCUMENT_REQUIREMENTS[accountType];
+  const progress: Array<{ id: KycStep; label: string }> = [
+    { id: "details", label: "Details" },
+    { id: "documents", label: "Documents" },
+    { id: "review", label: "Review" },
+    { id: "overview", label: "Status" }
+  ];
+  const activeProgress = step === "overview" ? 0 : progress.findIndex((item) => item.id === step);
+  const statusLabel = verification === "approved" ? "Approved" : verification === "pending" ? "Under Review" : verification === "declined" ? "Action Required" : "Not Started";
+  const today = new Date().toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
+
+  function handleUpload(label: string, fileList: FileList | null) {
+    setUploadError("");
+    const file = fileList?.[0];
+    if (!file) return;
+    if (!KYC_UPLOAD_CONFIG.acceptedTypes.includes(file.type)) {
+      setUploadError(`Unsupported file type. Upload ${KYC_UPLOAD_CONFIG.acceptedExtensions}.`);
+      return;
+    }
+    if (file.size > KYC_UPLOAD_CONFIG.maxBytes) {
+      setUploadError("File exceeds the maximum allowed size.");
+      return;
+    }
+    setDocuments((current) => [
+      ...current.filter((document) => document.label !== label),
+      { id: `${label}-${file.name}`, label, name: file.name, size: file.size, status: "uploaded" }
+    ]);
+  }
+
+  function submitVerification() {
+    if (!accepted || submitting) return;
+    setSubmitting(true);
+    window.setTimeout(() => {
+      setVerification("pending");
+      window.location.href = href("verification-pending");
+    }, 450);
+  }
+
   return (
-    <section className="page-shell">
-      <SectionHead eyebrow="KYC / Verification" title="Prototype identity verification" />
-      <div className="steps">
-        {steps.map((step, index) => (
-          <div key={step} className={index < 5 ? "done" : ""}>
-            <span>{index + 1}</span>
-            <strong>{step}</strong>
-          </div>
-        ))}
-      </div>
-      <div className="kyc-grid">
-        <PlaceholderImage src="/images/verification/kyc-hero.jpg" />
-        <form className="form-card">
-          <label>
-            {accountType === "company" ? "Registered company name" : "Full legal name"}
-            <input placeholder={accountType === "company" ? "Iconic Trading Pty Ltd" : "Avery Morgan"} />
-          </label>
-          <label>
-            {accountType === "company" ? "Registered address" : "Residential address"}
-            <input placeholder="Level 4, 100 Collins Street, Melbourne VIC" />
-          </label>
-          <label>
-            {accountType === "company" ? "Director / representative" : "Driver licence / passport"}
-            <input placeholder={accountType === "company" ? "Authorised representative details" : "D1234567"} />
-          </label>
-          <label>
-            Mock document upload
-            <input type="file" />
-          </label>
-          <div className="document-row">
-            <FileText size={18} />
-            <span>Passport · Expires: 12 March 2031</span>
-          </div>
-          <div className="document-row">
-            <FileText size={18} />
-            <span>Driver Licence · Expires: 16 November 2028</span>
+    <section className="kyc-page">
+      <div className="kyc-hero">
+        <div className="kyc-hero-copy">
+          <span className="eyebrow">Verification</span>
+          <h1>Complete your verification</h1>
+          <p>Verification is required before bullion purchasing is enabled. This prototype keeps the provider integration neutral and represents a manual review workflow.</p>
+          <div className="kyc-status-strip">
+            <Info label="Account Type" value={isCompany ? "Australian Company" : "Individual"} />
+            <Info label="Current Status" value={statusLabel} />
           </div>
           <div className="split-actions">
-            <PrimaryButton onClick={() => setVerification("pending")} variant="secondary">
-              Submit for Review
+            <PrimaryButton onClick={() => setStep(verification === "pending" ? "review" : "details")}>
+              {documents.length || verification !== "unverified" ? "Continue Verification" : "Start Verification"}
             </PrimaryButton>
-            <PrimaryButton onClick={() => setVerification("approved")}>Demo Approve</PrimaryButton>
+            <PrimaryButton href="account" variant="secondary">Back to Account</PrimaryButton>
           </div>
-        </form>
+        </div>
+        <OptimisedImage src="/images/kyc/verification-hero.webp" alt="Iconic Bullion account verification cards with gold bar" className="kyc-hero-image" priority sizes="(max-width: 900px) 100vw, 46vw" />
       </div>
-      <div className="panel">
-        <Info label="Current status" value={verification.replace("-", " ")} />
-        <p>Approvals are represented as mock frontend states. Future administration and GreenID integration are intentionally outside this prototype.</p>
+
+      <div className="kyc-progress" aria-label="Verification progress">
+        {progress.map((item, index) => (
+          <button key={item.label} className={cx(index <= activeProgress && "active", step === item.id && "current")} onClick={() => setStep(item.id === "overview" ? "review" : item.id)}>
+            <span>{index + 1}</span>
+            {item.label}
+          </button>
+        ))}
       </div>
+
+      {step === "details" && (
+        <div className="kyc-workspace">
+          <div className="kyc-panel">
+            <span className="eyebrow">{isCompany ? "Company details" : "Personal details"}</span>
+            <h2>{isCompany ? "Australian company verification" : "Individual verification"}</h2>
+            <div className="form-card two-col kyc-form">
+              {isCompany ? (
+                <>
+                  <label>Company Name<input defaultValue="Iconic Trading Pty Ltd" /></label>
+                  <label>ABN / ACN<input defaultValue="12 345 678 901" /></label>
+                  <label className="wide">Registered Address<input defaultValue="Level 4, 100 Collins Street" /></label>
+                  <label className="wide">Trading Address if different<input placeholder="Leave blank if same as registered address" /></label>
+                  <label>Representative First Name<input defaultValue="Avery" /></label>
+                  <label>Representative Last Name<input defaultValue="Morgan" /></label>
+                  <label>Role / Position<input defaultValue="Director" /></label>
+                  <label>Email<input type="email" defaultValue="avery@example.com" /></label>
+                  <label>Mobile<input defaultValue="+61 400 000 000" /></label>
+                </>
+              ) : (
+                <>
+                  <label>First Name<input defaultValue="Avery" /></label>
+                  <label>Last Name<input defaultValue="Morgan" /></label>
+                  <label>Date of Birth<input type="date" /></label>
+                  <label>Mobile<input defaultValue="+61 400 000 000" /></label>
+                  <label>Email<input type="email" defaultValue="avery@example.com" /></label>
+                  <label className="wide">Residential Address<input defaultValue="Level 4, 100 Collins Street" /></label>
+                  <label>Suburb<input defaultValue="Melbourne" /></label>
+                  <label>State<input defaultValue="VIC" /></label>
+                  <label>Postcode<input defaultValue="3000" /></label>
+                  <label>Country<input defaultValue="Australia" /></label>
+                </>
+              )}
+            </div>
+            <div className="split-actions">
+              <PrimaryButton onClick={() => setStep("documents")}>Continue to Documents</PrimaryButton>
+            </div>
+          </div>
+          <div className="kyc-help-card">
+            <ShieldCheck />
+            <h3>Secure manual review</h3>
+            <p>Details collected here are prototype fields only. A production provider can be connected without changing the customer-facing steps.</p>
+          </div>
+        </div>
+      )}
+
+      {step === "documents" && (
+        <div className="kyc-documents">
+          <OptimisedImage src="/images/kyc/document-upload.webp" alt="Secure document upload visual for Iconic Bullion verification" className="kyc-documents-image" sizes="(max-width: 900px) 100vw, 42vw" />
+          <div className="kyc-panel">
+            <span className="eyebrow">Secure documents</span>
+            <h2>Upload verification documents</h2>
+            <p>Upload the required documents securely to continue your account verification.</p>
+            <div className="upload-list">
+              {documentRequirements.map((label) => {
+                const uploaded = documents.find((document) => document.label === label);
+                return (
+                  <label key={label} className={cx("upload-drop", uploaded && "uploaded")}>
+                    <UploadCloud size={22} />
+                    <span>
+                      <strong>{label}</strong>
+                      <small>{uploaded ? `${uploaded.name} · ${(uploaded.size / 1024 / 1024).toFixed(1)} MB` : `${KYC_UPLOAD_CONFIG.acceptedExtensions} · max 10 MB`}</small>
+                    </span>
+                    <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(event) => handleUpload(label, event.target.files)} />
+                  </label>
+                );
+              })}
+            </div>
+            {uploadError && <p className="field-error">{uploadError}</p>}
+            {documents.length > 0 && (
+              <div className="document-row uploaded-document">
+                <FileText size={18} />
+                <span>{documents.length} document metadata record{documents.length > 1 ? "s" : ""} ready for review</span>
+                <button type="button" onClick={() => setDocuments([])}><X size={16} /> Remove</button>
+              </div>
+            )}
+            <div className="split-actions">
+              <PrimaryButton onClick={() => setStep("review")}>Review Submission</PrimaryButton>
+              <PrimaryButton onClick={() => setStep("details")} variant="secondary">Back</PrimaryButton>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {step === "review" && (
+        <div className="kyc-workspace">
+          <div className="kyc-panel">
+            <span className="eyebrow">Review & Submit</span>
+            <h2>Review your verification details</h2>
+            <div className="review-grid">
+              <Info label="Account Type" value={isCompany ? "Australian Company" : "Individual"} />
+              <Info label="Submission Date" value={today} />
+              <Info label={isCompany ? "Company" : "Customer"} value={isCompany ? "Iconic Trading Pty Ltd" : "Avery Morgan"} />
+              <Info label="Documents" value={documents.length ? `${documents.length} uploaded` : "Awaiting upload"} />
+            </div>
+            <div className="document-summary">
+              {documentRequirements.map((label) => {
+                const uploaded = documents.find((document) => document.label === label);
+                return (
+                  <div key={label}>
+                    <FileText size={18} />
+                    <span>
+                      <strong>{label}</strong>
+                      <small>{uploaded ? uploaded.name : "Not uploaded in prototype session"}</small>
+                    </span>
+                    <button type="button" onClick={() => setStep("documents")}>Edit</button>
+                  </div>
+                );
+              })}
+            </div>
+            <label className="checkbox declaration">
+              <input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} />
+              <span>I confirm that the information provided is accurate for this prototype submission.</span>
+            </label>
+            <div className="split-actions">
+              <PrimaryButton onClick={submitVerification} disabled={!accepted || submitting}>{submitting ? "Submitting..." : "Submit for Verification"}</PrimaryButton>
+              <PrimaryButton onClick={() => setStep("documents")} variant="secondary">Back to Documents</PrimaryButton>
+            </div>
+          </div>
+          <div className="kyc-help-card">
+            <Clock />
+            <h3>Manual review workflow</h3>
+            <p>Submitting moves the account to Under Review. Purchasing remains disabled through the existing verification gate until approved.</p>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -2742,33 +2902,66 @@ function AuthSuccessPage({ title, text, action, next }: { title: string; text: s
 }
 
 function VerificationStatusPage({ tone, setVerification }: { tone: "pending" | "approved" | "declined"; setVerification: (state: VerificationState) => void }) {
-  const copy = {
-    pending: ["Under Review", "Documents received. Bullion trading remains disabled while the account is reviewed.", "verification-pending.jpg"],
-    approved: ["Verification Approved", "Bullion purchasing is now enabled for this prototype account.", "verification-approved.jpg"],
-    declined: ["Action Required", "Admin note placeholder: please update details or contact support.", "verification-declined.jpg"]
+  const content = {
+    pending: {
+      eyebrow: "Verification",
+      title: "Verification under review",
+      text: "Your details have been submitted and are being reviewed. Bullion purchasing remains disabled while this manual review is pending.",
+      image: "/images/kyc/pending-review.webp",
+      alt: "Iconic Bullion verification under review status visual",
+      primary: "Back to Account",
+      primaryHref: "account",
+      secondary: "View Submission",
+      secondaryHref: "verification",
+      rows: [["Status", "Under Review"], ["Submitted", new Date().toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })], ["Account Type", "Individual / Australian Company"]]
+    },
+    approved: {
+      eyebrow: "Verification",
+      title: "Verification approved",
+      text: "Your account is now verified and bullion purchasing is enabled.",
+      image: "/images/kyc/approved-status.webp",
+      alt: "Iconic Bullion verification approved status visual",
+      primary: "Browse Bullion",
+      primaryHref: "bullion",
+      secondary: "Go to Account",
+      secondaryHref: "account",
+      rows: [["Status", "Approved"], ["Approved", new Date().toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })], ["Purchasing", "Enabled"]]
+    },
+    declined: {
+      eyebrow: "Verification",
+      title: "Action required",
+      text: "We need some additional information before your account can be approved.",
+      image: "/images/kyc/action-required.webp",
+      alt: "Iconic Bullion action required verification visual",
+      primary: "Update Verification",
+      primaryHref: "verification",
+      secondary: "Contact Support",
+      secondaryHref: "contact",
+      rows: [["Status", "Action Required"], ["Reason", "Additional document required"], ["Next Step", "Update verification details"]]
+    }
   }[tone];
+
+  useEffect(() => {
+    setVerification(tone === "approved" ? "approved" : tone);
+  }, [setVerification, tone]);
+
   return (
-    <section className="page-shell narrow">
-      <div className="success-panel">
-        <PlaceholderImage src={`/images/verification/${copy[2]}`} />
-        <h1>{copy[0]}</h1>
-        <p>{copy[1]}</p>
+    <section className={cx("verification-status-page", tone)}>
+      <div className="verification-status-copy">
+        <span className="eyebrow">{content.eyebrow}</span>
+        <h1>{content.title}</h1>
+        <p>{content.text}</p>
+        <div className="review-grid">
+          {content.rows.map(([label, value]) => (
+            <Info key={label} label={label} value={value} />
+          ))}
+        </div>
         <div className="split-actions">
-          <PrimaryButton
-            onClick={() => {
-              setVerification(tone === "approved" ? "approved" : tone);
-              window.location.href = tone === "approved" ? href("bullion") : href("verification");
-            }}
-          >
-            {tone === "approved" ? "Browse Bullion" : "Update Details"}
-          </PrimaryButton>
-          {tone === "declined" && (
-            <PrimaryButton href="contact" variant="secondary">
-              Contact Support
-            </PrimaryButton>
-          )}
+          <PrimaryButton href={content.primaryHref}>{content.primary}</PrimaryButton>
+          <PrimaryButton href={content.secondaryHref} variant="secondary">{content.secondary}</PrimaryButton>
         </div>
       </div>
+      <OptimisedImage src={content.image} alt={content.alt} className="verification-status-image" priority sizes="(max-width: 900px) 100vw, 50vw" />
     </section>
   );
 }

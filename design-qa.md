@@ -36,3 +36,21 @@
 - P3: The screenshot is a full-page capture; this QA saved only the top viewport evidence file, with additional regions verified live in-browser.
 
 final result: passed
+
+---
+
+**KYC Verification Flow QA**
+- Source visuals: `/Users/amankumarsingh/Downloads/Iconic Bullion Images/KYC Verification/*.png`
+- Implementation routes checked: `/verification/`, `/verification-pending/`, `/verification-approved/`, `/verification-declined/`
+- Browser evidence: in-app browser on `http://127.0.0.1:3000/verification/` and status routes.
+- Responsive viewports checked: 1440, 1024, 768, 430, 390, and 375px widths.
+
+**KYC Findings**
+- No remaining P0/P1/P2 issues found.
+- New verification overview loads the supplied hero visual, keeps the shared header/ticker/footer, and uses the existing verification state.
+- Details, documents, review, and submit steps are reachable and retain provider-neutral manual-review copy.
+- Document upload controls validate centralized type/size limits and display metadata only.
+- Pending, approved, and action-required screens load the correct supplied visuals and CTAs.
+- Responsive sweep showed no horizontal overflow and all checked KYC/status images loaded.
+
+final result: passed
