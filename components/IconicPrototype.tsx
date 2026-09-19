@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState, type PointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type PointerEvent } from "react";
 import {
   AlertTriangle,
   BadgeCheck,
@@ -14,6 +14,8 @@ import {
   ChevronDown,
   Clock,
   Download,
+  Eye,
+  EyeOff,
   FileText,
   Filter,
   Lock,
@@ -65,6 +67,8 @@ const validRoutes = new Set([
   "login",
   "forgot-password",
   "reset-password",
+  "password-reset-success",
+  "account-created",
   "verification-pending",
   "verification-approved",
   "verification-declined",
@@ -99,6 +103,10 @@ function href(route: string) {
 
 function cx(...classes: Array<string | false | undefined>) {
   return classes.filter(Boolean).join(" ");
+}
+
+function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
 function useStoredState<T>(key: string, initial: T) {
@@ -253,13 +261,15 @@ function Header({
   verification,
   market,
   currency,
-  onCurrency
+  onCurrency,
+  activeRoute
 }: {
   cartCount: number;
   verification: VerificationState;
   market: typeof marketSnapshot;
   currency: "AUD" | "USD";
   onCurrency: (currency: "AUD" | "USD") => void;
+  activeRoute: string;
 }) {
   const [open, setOpen] = useState(false);
   const nav = [
@@ -272,6 +282,7 @@ function Header({
     ["Enquire", "contact"],
     [verification === "logged-out" ? "Sign In" : "Account", verification === "logged-out" ? "login" : "account"]
   ];
+  const isActiveNav = (route: string) => activeRoute === route || (route === "bullion" && ["buy-sell", "product"].includes(activeRoute));
   return (
     <header className="site-header">
       <div className="topbar">
@@ -282,7 +293,7 @@ function Header({
         </Link>
         <nav className="desktop-nav" aria-label="Primary">
           {nav.map(([label, route]) => (
-            <Link key={route} href={href(route)}>
+            <Link key={route} href={href(route)} className={isActiveNav(route) ? "active" : undefined} aria-current={isActiveNav(route) ? "page" : undefined}>
               {label}
             </Link>
           ))}
@@ -309,7 +320,7 @@ function Header({
             <X size={22} />
           </button>
           {[...nav, ...actions, ["Cart", "cart"], ["Serial Verification", "serial-verification"]].map(([label, route]) => (
-            <Link key={route} href={href(route)} onClick={() => setOpen(false)}>
+            <Link key={route} href={href(route)} onClick={() => setOpen(false)} className={isActiveNav(route) ? "active" : undefined} aria-current={isActiveNav(route) ? "page" : undefined}>
               {label}
             </Link>
           ))}
@@ -721,7 +732,7 @@ export function IconicPrototype({ route }: { route: string }) {
       case "verification":
         return <VerificationPage accountType={accountType} verification={verification} setVerification={setVerification} />;
       case "cart":
-        return <CartPage lines={cartLines} totals={totals} secondsLeft={secondsLeft} setCart={setCart} verification={verification} />;
+        return <CartPage lines={cartLines} totals={totals} secondsLeft={secondsLeft} setCart={setCart} verification={verification} fulfilment={fulfilment} setFulfilment={setFulfilment} />;
       case "checkout":
         return (
           <CheckoutPage
@@ -747,9 +758,13 @@ export function IconicPrototype({ route }: { route: string }) {
       case "login":
         return <LoginPage setVerification={setVerification} />;
       case "forgot-password":
-        return <AuthSimple title="Forgot Password" text="Enter your email and we will send a prototype reset link." action="Send Reset Link" next="reset-password" />;
+        return <ForgotPasswordPage />;
       case "reset-password":
-        return <AuthSimple title="Reset Password" text="Choose a new password for the prototype account." action="Update Password" next="login" password />;
+        return <ResetPasswordPage />;
+      case "password-reset-success":
+        return <AuthSuccessPage title="Password updated" text="Your prototype password has been updated. You can now sign in to continue managing orders, invoices and verification." action="Return to Sign In" next="login" />;
+      case "account-created":
+        return <AuthSuccessPage title="Account created" text="Your Iconic Bullion account is ready. The next step is account verification before bullion purchasing is enabled." action="Start Verification" next="verification" />;
       case "verification-pending":
         return <VerificationStatusPage tone="pending" setVerification={setVerification} />;
       case "verification-approved":
@@ -802,7 +817,7 @@ export function IconicPrototype({ route }: { route: string }) {
 
   return (
     <>
-      <Header cartCount={cartCount} verification={verification} market={market} currency={currency} onCurrency={setCurrency} />
+      <Header cartCount={cartCount} verification={verification} market={market} currency={currency} onCurrency={setCurrency} activeRoute={normalRoute} />
       <main>{page}</main>
       <Footer />
     </>
@@ -1665,46 +1680,216 @@ function MarketPage({
 }
 
 function BuySellPage({ market }: { market: typeof marketSnapshot }) {
+  const [pricingBrand, setPricingBrand] = useState("All");
+  const [pricingType, setPricingType] = useState("All");
+  const [pricingWeight, setPricingWeight] = useState("All");
+  const [pricingAvailability, setPricingAvailability] = useState("All");
+  const [pricingSort, setPricingSort] = useState("Featured");
+  const pricingProducts = useMemo(() => products.filter(hasPublishedProductImage), []);
+  const brands = useMemo(() => ["All", ...Array.from(new Set(pricingProducts.map((product) => product.brand)))], [pricingProducts]);
+  const types = useMemo(() => ["All", ...Array.from(new Set(pricingProducts.map((product) => product.type)))], [pricingProducts]);
+  const weights = useMemo(() => ["All", ...Array.from(new Set(pricingProducts.map((product) => product.weightLabel)))], [pricingProducts]);
+  const availabilities = useMemo(() => ["All", ...Array.from(new Set(pricingProducts.map((product) => product.availability)))], [pricingProducts]);
+  const pricingRows = useMemo(() => {
+    let result = pricingProducts.filter((product) => {
+      const brandMatch = pricingBrand === "All" || product.brand === pricingBrand;
+      const typeMatch = pricingType === "All" || product.type === pricingType;
+      const weightMatch = pricingWeight === "All" || product.weightLabel === pricingWeight;
+      const availabilityMatch = pricingAvailability === "All" || product.availability === pricingAvailability;
+      return brandMatch && typeMatch && weightMatch && availabilityMatch;
+    });
+    result = [...result].sort((a, b) => {
+      if (pricingSort === "Price Low to High") return calculateProductBullionPrice(a, market) - calculateProductBullionPrice(b, market);
+      if (pricingSort === "Price High to Low") return calculateProductBullionPrice(b, market) - calculateProductBullionPrice(a, market);
+      if (pricingSort === "Weight Low to High") return a.weightGrams - b.weightGrams;
+      if (pricingSort === "Weight High to Low") return b.weightGrams - a.weightGrams;
+      const featured = Number(Boolean(b.featured)) - Number(Boolean(a.featured));
+      if (featured) return featured;
+      return a.weightGrams - b.weightGrams;
+    });
+    return result.slice(0, 12);
+  }, [market, pricingAvailability, pricingBrand, pricingProducts, pricingSort, pricingType, pricingWeight]);
+  const featuredPricingProducts = pricingRows.slice(0, 4);
+
   return (
-    <section className="page-shell">
-      <SectionHead eyebrow="Buy / Sell Pricing" title="Indicative bullion prices" />
-      <div className="table-wrap">
-        <table>
+    <section className="buy-sell-page">
+      <section className="buy-sell-hero">
+        <div className="buy-sell-hero-copy">
+          <span className="eyebrow">Buy / Sell Pricing</span>
+          <h1>Current bullion buy &amp; sell pricing</h1>
+          <p>View current product selling prices and indicative buy-back pricing across selected bullion products.</p>
+          <p>Pricing is linked to the prevailing gold market and updated regularly.</p>
+          <div className="split-actions">
+            <a className="btn primary" href="#pricing-table">
+              View Pricing
+            </a>
+            <PrimaryButton href="bullion" variant="secondary">
+              Shop Bullion
+            </PrimaryButton>
+          </div>
+        </div>
+        <OptimisedImage
+          src="/images/pricing/buy-sell-hero.webp"
+          alt="Gold bullion bars representing current buy and sell pricing"
+          className="buy-sell-hero-image"
+          priority
+          sizes="(max-width: 900px) 100vw, 56vw"
+        />
+      </section>
+      <section className="pricing-table-section" id="pricing-table">
+        <div className="pricing-table-head">
+          <div>
+            <span className="eyebrow">Current Product Pricing</span>
+            <h2>Buy price vs sell-back price</h2>
+            <p>
+              Buy price is the customer purchase price. Sell-back price is the indicative price Iconic Bullion may pay to buy bullion back, subject to inspection and final confirmation.
+            </p>
+          </div>
+          <p className="pricing-updated">Last updated: {market.lastUpdated} · 5 min refresh</p>
+        </div>
+        <div className="pricing-filter-bar" aria-label="Pricing filters">
+          <label>
+            Brand
+            <select value={pricingBrand} onChange={(event) => setPricingBrand(event.target.value)}>
+              {brands.map((item) => (
+                <option key={item}>{item}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Type
+            <select value={pricingType} onChange={(event) => setPricingType(event.target.value)}>
+              {types.map((item) => (
+                <option key={item}>{item}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Weight
+            <select value={pricingWeight} onChange={(event) => setPricingWeight(event.target.value)}>
+              {weights.map((item) => (
+                <option key={item}>{item}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Availability
+            <select value={pricingAvailability} onChange={(event) => setPricingAvailability(event.target.value)}>
+              {availabilities.map((item) => (
+                <option key={item}>{item}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Sort
+            <select value={pricingSort} onChange={(event) => setPricingSort(event.target.value)}>
+              {["Featured", "Price Low to High", "Price High to Low", "Weight Low to High", "Weight High to Low"].map((item) => (
+                <option key={item}>{item}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="table-wrap pricing-table-wrap">
+          <table className="buy-sell-table">
           <thead>
             <tr>
               <th>Product</th>
               <th>Brand</th>
               <th>Weight</th>
-              <th>Our Selling Price</th>
-              <th>Indicative Buy-Back</th>
+                <th>Buy Price</th>
+                <th>Sell-Back Price</th>
               <th>Availability</th>
               <th>Last Updated</th>
+                <th>Action</th>
             </tr>
           </thead>
           <tbody>
-            {products.slice(0, 10).map((product) => (
+              {pricingRows.map((product) => (
               <tr key={product.id}>
-                <td>{product.name}</td>
-                <td>{product.brand}</td>
-                <td>{product.weightLabel}</td>
-                <td>{formatAUD(calculateProductBullionPrice(product, market))}</td>
-                <td>{formatAUD(calculateBuyBackPrice(product, market))}</td>
-                <td>{product.availability}</td>
-                <td>{market.lastUpdated}</td>
+                  <td data-label="Product">
+                    <Link className="pricing-product-cell" href={`/product?id=${product.id}`}>
+                      <OptimisedImage src={product.image} alt={product.name} className="pricing-product-thumb" sizes="64px" />
+                      <span>
+                        <strong>{product.name}</strong>
+                        <small>{product.purity}</small>
+                      </span>
+                    </Link>
+                  </td>
+                  <td data-label="Brand">{product.brand}</td>
+                  <td data-label="Weight">{product.weightLabel}</td>
+                  <td data-label="Buy Price" className="price-cell">{formatAUD(calculateProductBullionPrice(product, market))}</td>
+                  <td data-label="Sell-Back Price" className="price-cell sellback">{formatAUD(calculateBuyBackPrice(product, market))}</td>
+                  <td data-label="Availability">
+                    <StatusPill tone={product.availability === "In Stock" ? "green" : product.availability === "Out of Stock" ? "red" : "gold"}>{product.availability}</StatusPill>
+                  </td>
+                  <td data-label="Last Updated">{market.lastUpdated}</td>
+                  <td data-label="Action">
+                    <Link className="table-action" href={`/product?id=${product.id}`}>
+                      View Product
+                    </Link>
+                  </td>
               </tr>
             ))}
+              {pricingRows.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="pricing-empty">
+                    No products match the selected pricing filters.
+                  </td>
+                </tr>
+              )}
           </tbody>
         </table>
       </div>
-      <section className="split-section">
-        <PlaceholderImage src="/images/buy-sell/bullion-inspection.jpg" />
+      </section>
+      <section className="pricing-explanation">
+        <div>
+          <span className="eyebrow">How Pricing Works</span>
+          <h2>Spot, product price and sell-back pricing are different references.</h2>
+          <p>Bullion product prices are linked to the underlying gold market, with product-specific pricing applied to each item. Buy-back pricing is indicative and subject to inspection, verification and final confirmation.</p>
+        </div>
+        <div className="pricing-points">
+          {[
+            ["Spot Gold Price", "Market reference price for gold."],
+            ["Product Buy Price", "Retail product selling price, including product-specific adjustments."],
+            ["Sell-Back Price", "Indicative repurchase price, subject to physical review."],
+            ["Updated Regularly", `Aligned with the shared market refresh. Last updated ${market.lastUpdated}.`]
+          ].map(([title, body]) => (
+            <article key={title}>
+              <h3>{title}</h3>
+              <p>{body}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+      <section className="sell-to-iconic">
+        <OptimisedImage src="/images/pricing/bullion-inspection.webp" alt="Professional inspection of bullion for sell-back pricing" className="sell-to-iconic-image" sizes="(max-width: 900px) 100vw, 48vw" />
         <div>
           <span className="eyebrow">Sell bullion to Iconic</span>
           <h2>Inspection before final buy-back</h2>
-          <p>Online buy-back prices are indicative. Final pricing requires in-store inspection, verification and business approval.</p>
-          <PrimaryButton href="contact">Enquire About Selling Bullion</PrimaryButton>
+          <p>Customers can view indicative buy-back pricing online, but final sell-back transactions are reviewed and completed through the appropriate in-store process, including product inspection and verification.</p>
+          <p className="pricing-note">Buy-back prices shown online are indicative only and may be subject to physical inspection and final confirmation.</p>
+          <PrimaryButton href="contact">Make a Buy-Back Enquiry</PrimaryButton>
         </div>
       </section>
+      {featuredPricingProducts.length > 0 && (
+        <section className="pricing-quick-links">
+          <div>
+            <span className="eyebrow">Popular Bullion Products</span>
+            <h2>Continue into selected bullion products.</h2>
+          </div>
+          <div>
+            {featuredPricingProducts.map((product) => (
+              <Link key={product.id} href={`/product?id=${product.id}`}>
+                <OptimisedImage src={product.image} alt={product.name} className="pricing-quick-image" sizes="72px" />
+                <span>
+                  <strong>{product.name}</strong>
+                  <small>{formatAUD(calculateProductBullionPrice(product, market))}</small>
+                </span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
     </section>
   );
 }
@@ -1718,50 +1903,93 @@ function SignupPage({
   setAccountType: (type: AccountType) => void;
   setVerification: (state: VerificationState) => void;
 }) {
+  const [selectedType, setSelectedType] = useState<AccountType | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [fields, setFields] = useState({ name: "", email: "", mobile: "", company: "", abn: "", password: "" });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const activeType = selectedType ?? accountType;
+  const isCompany = activeType === "company";
+
+  function chooseType(type: AccountType) {
+    setAccountType(type);
+    setSelectedType(type);
+    setErrors({});
+  }
+
+  function updateField(field: keyof typeof fields, value: string) {
+    setFields((current) => ({ ...current, [field]: value }));
+    setErrors((current) => ({ ...current, [field]: "" }));
+  }
+
+  function submitSignup(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const nextErrors: Record<string, string> = {};
+    if (!fields.name.trim()) nextErrors.name = isCompany ? "Authorised representative name is required." : "Full legal name is required.";
+    if (isCompany && !fields.company.trim()) nextErrors.company = "Registered company name is required.";
+    if (isCompany && !fields.abn.trim()) nextErrors.abn = "ABN or ACN is required.";
+    if (!isValidEmail(fields.email)) nextErrors.email = "Please enter a valid email address.";
+    if (!fields.mobile.trim()) nextErrors.mobile = "Mobile number is required.";
+    if (fields.password.length < 8) nextErrors.password = "Password must be at least 8 characters.";
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length) return;
+    setVerification("unverified");
+    window.location.href = href("account-created");
+  }
+
   return (
-    <section className="page-shell narrow">
-      <SectionHead eyebrow="Create account" title="Choose your account type" />
-      <div className="choice-grid">
-        <button className={accountType === "individual" ? "selected" : ""} onClick={() => setAccountType("individual")}>
-          <UserRound />
-          <strong>Individual</strong>
-          <span>Personal bullion purchasing with identity verification.</span>
-        </button>
-        <button className={accountType === "company" ? "selected" : ""} onClick={() => setAccountType("company")}>
-          <BriefcaseBusiness />
-          <strong>Australian Company</strong>
-          <span>Business account with ABN/ACN and authorised representative details.</span>
-        </button>
-      </div>
-      <form className="form-card">
-        <label>
-          {accountType === "company" ? "Company name" : "Full legal name"}
-          <input placeholder={accountType === "company" ? "Iconic Trading Pty Ltd" : "Avery Morgan"} />
-        </label>
-        <label>
-          Email
-          <input type="email" placeholder="customer@example.com" />
-        </label>
-        <label>
-          Mobile
-          <input placeholder="+61 400 000 000" />
-        </label>
-        {accountType === "company" && (
-          <label>
-            ABN / ACN
-            <input placeholder="12 345 678 901" />
-          </label>
-        )}
-        <PrimaryButton
-          onClick={() => {
-            setVerification("unverified");
-            window.location.href = href("verification");
-          }}
-        >
-          Continue to Verification
-        </PrimaryButton>
-      </form>
-    </section>
+    <AuthLayout
+      eyebrow="Create Account"
+      title={selectedType ? (isCompany ? "Australian company account" : "Individual account") : "Create your account"}
+      text={selectedType ? "Set up secure account access first. Identity and company verification happens after account creation." : "Choose the account type that matches how you intend to trade physical bullion."}
+    >
+      {!selectedType ? (
+        <div className="auth-card">
+          <div className="account-type-grid">
+            <button className={accountType === "individual" ? "selected" : ""} onClick={() => chooseType("individual")}>
+              <UserRound size={22} />
+              <strong>Individual</strong>
+              <span>Personal bullion purchasing with identity verification after account creation.</span>
+            </button>
+            <button className={accountType === "company" ? "selected" : ""} onClick={() => chooseType("company")}>
+              <BriefcaseBusiness size={22} />
+              <strong>Australian Company</strong>
+              <span>Business account access before ABN / ACN and representative verification.</span>
+            </button>
+          </div>
+          <p className="auth-note">Verification is completed in the dedicated account verification flow after this step.</p>
+        </div>
+      ) : (
+        <form className="auth-card auth-form" onSubmit={submitSignup} noValidate>
+          {isCompany && (
+            <AuthField label="Registered company name" error={errors.company}>
+              <input value={fields.company} onChange={(event) => updateField("company", event.target.value)} placeholder="Iconic Trading Pty Ltd" />
+            </AuthField>
+          )}
+          <AuthField label={isCompany ? "Authorised representative" : "Full legal name"} error={errors.name}>
+            <input value={fields.name} onChange={(event) => updateField("name", event.target.value)} placeholder="Avery Morgan" />
+          </AuthField>
+          {isCompany && (
+            <AuthField label="ABN / ACN" error={errors.abn}>
+              <input value={fields.abn} onChange={(event) => updateField("abn", event.target.value)} placeholder="12 345 678 901" />
+            </AuthField>
+          )}
+          <AuthField label="Email" error={errors.email}>
+            <input type="email" value={fields.email} onChange={(event) => updateField("email", event.target.value)} placeholder="customer@example.com" />
+          </AuthField>
+          <AuthField label="Mobile" error={errors.mobile}>
+            <input value={fields.mobile} onChange={(event) => updateField("mobile", event.target.value)} placeholder="+61 400 000 000" />
+          </AuthField>
+          <AuthField label="Password" error={errors.password}>
+            <PasswordInput value={fields.password} onChange={(value) => updateField("password", value)} show={showPassword} setShow={setShowPassword} />
+          </AuthField>
+          <PrimaryButton type="submit">Create Account</PrimaryButton>
+          <div className="auth-links">
+            <button type="button" onClick={() => setSelectedType(null)}>Change Account Type</button>
+            <Link href="/login">Already have an account?</Link>
+          </div>
+        </form>
+      )}
+    </AuthLayout>
   );
 }
 
@@ -1834,62 +2062,144 @@ function CartPage({
   totals,
   secondsLeft,
   setCart,
-  verification
+  verification,
+  fulfilment,
+  setFulfilment
 }: {
   lines: Array<CartLine & { product: BullionProduct }>;
   totals: { subtotal: number; deliveryFee: number; total: number };
   secondsLeft: number;
   setCart: (lines: CartLine[]) => void;
   verification: VerificationState;
+  fulfilment: Fulfilment;
+  setFulfilment: (fulfilment: Fulfilment) => void;
 }) {
+  const verified = verification === "approved";
+  const checkoutBlockedReason = !verified ? "Complete verification before checkout." : lines.some((line) => line.product.availability === "Out of Stock") ? "Remove out-of-stock items before checkout." : undefined;
+  const updateQuantity = (line: CartLine & { product: BullionProduct }, nextQuantity: number) => {
+    const quantity = Math.min(Math.max(nextQuantity, 1), Math.max(line.product.stock, 1));
+    setCart(lines.map((item) => (item.productId === line.productId ? { ...item, quantity } : item)));
+  };
+
   return (
-    <section className="page-shell">
-      <SectionHead eyebrow="Cart" title="Locked bullion pricing" />
-      {verification !== "approved" && <VerificationGate onApprove={() => window.localStorage.setItem("ib-verification", JSON.stringify("approved"))} />}
+    <section className="cart-page">
+      <SectionHead eyebrow="Cart" title="Locked bullion pricing" subtitle="Eligible bullion prices are locked for 10 minutes once added to cart." />
+      {!verified && <VerificationGate onApprove={() => window.localStorage.setItem("ib-verification", JSON.stringify("approved"))} />}
       {lines.length === 0 ? (
-        <StatePage kind="empty-cart" embedded />
+        <section className="cart-empty-panel">
+          <OptimisedImage
+            src="/images/cart/price-lock-empty.webp"
+            alt="Iconic Bullion gold bars representing secure locked bullion pricing"
+            className="cart-empty-image"
+            priority
+            sizes="(max-width: 900px) 100vw, 62vw"
+          />
+          <div>
+            <span className="eyebrow">Price Lock</span>
+            <h2>Your cart is empty</h2>
+            <p>Add verified bullion products to see the 10-minute price lock.</p>
+            <p>Eligible bullion prices are locked for 10 minutes once added to cart.</p>
+            <PrimaryButton href="bullion">Browse Bullion</PrimaryButton>
+          </div>
+        </section>
       ) : (
         <div className="cart-layout">
           <div className="line-list">
             {lines.map((line) => (
               <article className="cart-line" key={line.productId}>
-                <ProductMedia src={line.product.image} alt={`${line.product.brand} ${line.product.name}`} />
-                <div>
+                <ProductMedia src={line.product.image} alt={`${line.product.brand} ${line.product.name}`} className="cart-product-image" />
+                <div className="cart-line-copy">
+                  <span>{line.product.brand}</span>
                   <strong>
-                    {line.product.brand} {line.product.name}
+                    {line.product.name}
                   </strong>
-                  <p>{line.product.weightLabel} · Locked price {formatAUD(line.lockedPrice)}</p>
+                  <p>{line.product.weightLabel} · {line.product.purity}</p>
+                  <StatusPill tone={line.product.availability === "In Stock" ? "green" : line.product.availability === "Out of Stock" ? "red" : "gold"}>{line.product.availability}</StatusPill>
                 </div>
-                <input
-                  aria-label={`Quantity for ${line.product.name}`}
-                  type="number"
-                  min="1"
-                  value={line.quantity}
-                  onChange={(event) =>
-                    setCart(lines.map((item) => (item.productId === line.productId ? { ...item, quantity: Number(event.target.value) } : item)))
-                  }
-                />
-                <strong>{formatAUD(line.lockedPrice * line.quantity)}</strong>
+                <div className="quantity-stepper" aria-label={`Quantity for ${line.product.name}`}>
+                  <button type="button" aria-label={`Decrease quantity for ${line.product.name}`} onClick={() => updateQuantity(line, line.quantity - 1)} disabled={line.quantity <= 1}>
+                    -
+                  </button>
+                  <input
+                    aria-label={`Quantity for ${line.product.name}`}
+                    type="number"
+                    min="1"
+                    max={Math.max(line.product.stock, 1)}
+                    value={line.quantity}
+                    onChange={(event) => updateQuantity(line, Number(event.target.value) || 1)}
+                  />
+                  <button type="button" aria-label={`Increase quantity for ${line.product.name}`} onClick={() => updateQuantity(line, line.quantity + 1)} disabled={line.quantity >= line.product.stock}>
+                    +
+                  </button>
+                </div>
+                <div className="cart-line-price">
+                  <span>Locked unit price</span>
+                  <strong>{formatAUD(line.lockedPrice)}</strong>
+                  <small>Line total {formatAUD(line.lockedPrice * line.quantity)}</small>
+                  {line.quantity > line.product.stock && <small className="field-error">Only {line.product.stock} units are currently available.</small>}
+                </div>
+                <button className="remove-line" type="button" onClick={() => setCart(lines.filter((item) => item.productId !== line.productId))}>
+                  Remove
+                </button>
               </article>
             ))}
           </div>
-          <Summary totals={totals} secondsLeft={secondsLeft} cta="Proceed to Checkout" to="checkout" />
+          <Summary totals={totals} secondsLeft={secondsLeft} cta={checkoutBlockedReason ? "Verify to Continue" : "Proceed to Checkout"} to={checkoutBlockedReason ? undefined : "checkout"} fulfilment={fulfilment} setFulfilment={setFulfilment} blockedReason={checkoutBlockedReason} />
         </div>
       )}
     </section>
   );
 }
 
-function Summary({ totals, secondsLeft, cta, to }: { totals: { subtotal: number; deliveryFee: number; total: number }; secondsLeft: number; cta: string; to?: string }) {
+function Summary({
+  totals,
+  secondsLeft,
+  cta,
+  to,
+  fulfilment,
+  setFulfilment,
+  blockedReason
+}: {
+  totals: { subtotal: number; deliveryFee: number; total: number };
+  secondsLeft: number;
+  cta: string;
+  to?: string;
+  fulfilment?: Fulfilment;
+  setFulfilment?: (fulfilment: Fulfilment) => void;
+  blockedReason?: string;
+}) {
   return (
     <aside className="summary">
-      <span className="eyebrow">Price locked for</span>
+      <span className="eyebrow">Price Locked</span>
       <strong className={cx("timer", secondsLeft < 90 && "urgent")}>{formatTimer(secondsLeft)}</strong>
       <p>{secondsLeft === 0 ? "Your price lock has expired. Prices have been refreshed using the latest market rate." : "Your bullion price is temporarily locked while you complete your order."}</p>
+      {fulfilment && setFulfilment && (
+        <div className="cart-fulfilment" role="radiogroup" aria-label="Fulfilment choice">
+          <button type="button" className={fulfilment === "pickup" ? "selected" : ""} onClick={() => setFulfilment("pickup")} aria-pressed={fulfilment === "pickup"}>
+            <PackageCheck size={18} />
+            <span>Store Pickup</span>
+            <small>Free</small>
+          </button>
+          <button type="button" className={fulfilment === "delivery" ? "selected" : ""} onClick={() => setFulfilment("delivery")} aria-pressed={fulfilment === "delivery"}>
+            <Truck size={18} />
+            <span>Insured Delivery</span>
+            <small>AUD 35.00 mock fee</small>
+          </button>
+        </div>
+      )}
       <Info label="Subtotal" value={formatAUD(totals.subtotal)} />
       <Info label="Delivery / insurance" value={totals.deliveryFee ? formatAUD(totals.deliveryFee) : "Free"} />
       <Info label="Grand total" value={formatAUD(totals.total)} />
+      <div className="bank-box compact">
+        <Banknote />
+        <div>
+          <strong>Payment Method: Bank Transfer</strong>
+          <p>No card or wallet payment options are included.</p>
+        </div>
+      </div>
+      {blockedReason && <p className="summary-blocked" role="status">{blockedReason}</p>}
       {to && <PrimaryButton href={to}>{cta}</PrimaryButton>}
+      {!to && <button className="btn primary disabled" type="button" disabled>{cta}</button>}
     </aside>
   );
 }
@@ -1999,32 +2309,136 @@ function OrderSuccessPage({ orderPlaced, totals }: { orderPlaced: boolean; total
 }
 
 function Dashboard({ verification, setVerification }: { verification: VerificationState; setVerification: (state: VerificationState) => void }) {
+  const verificationMeta = {
+    approved: {
+      tone: "green" as const,
+      label: "Approved",
+      body: "Your prototype account is verified for bullion purchasing.",
+      action: "Browse Bullion",
+      href: "bullion"
+    },
+    pending: {
+      tone: "gold" as const,
+      label: "Under Review",
+      body: "Your verification has been submitted and is awaiting review.",
+      action: "View Verification Status",
+      href: "verification-pending"
+    },
+    declined: {
+      tone: "red" as const,
+      label: "Action Required",
+      body: "Your verification requires an update before bullion purchasing is enabled.",
+      action: "Update Verification",
+      href: "verification"
+    },
+    unverified: {
+      tone: "gold" as const,
+      label: "Action Required",
+      body: "Complete verification before purchasing bullion.",
+      action: "Complete Verification",
+      href: "verification"
+    },
+    "logged-out": {
+      tone: "neutral" as const,
+      label: "Sign In Required",
+      body: "Sign in or create an account to manage verification and orders.",
+      action: "Sign In",
+      href: "login"
+    }
+  }[verification];
+  const navItems = [
+    ["Overview", "account"],
+    ["Orders", "account/orders"],
+    ["Invoices", "invoice"],
+    ["Verification", "verification"],
+    ["Certificates", "certificate"],
+    ["Profile", "account"]
+  ];
+
   return (
     <section className="dashboard">
       <aside className="account-nav">
-        {["Overview", "Orders", "Invoices", "Verification", "Certificates", "Profile"].map((item) => (
-          <a key={item} href={item === "Orders" ? "/account/orders" : "#"}>
-            {item}
-          </a>
+        {navItems.map(([label, route], index) => (
+          <Link key={`${label}-${route}`} href={href(route)} className={index === 0 ? "active" : undefined}>
+            {label}
+          </Link>
         ))}
       </aside>
       <div className="dashboard-main">
-        <SectionHead eyebrow="Account" title="Welcome back" />
-        <div className="stats-grid">
-          <Info label="Verification Status" value={<StatusPill tone={verification === "approved" ? "green" : "gold"}>{verification}</StatusPill>} />
-          <Info label="Recent Orders" value="2" />
-          <Info label="Invoices" value="2" />
-          <Info label="Certificates" value="1" />
+        <SectionHead eyebrow="Account" title="Welcome back" subtitle="Manage your verification, orders, invoices and bullion certificates." />
+        <div className="dashboard-summary-grid">
+          <article className="dashboard-summary-card">
+            <span>Verification Status</span>
+            <strong>{verificationMeta.label}</strong>
+            <StatusPill tone={verificationMeta.tone}>{verificationMeta.label}</StatusPill>
+          </article>
+          <article className="dashboard-summary-card">
+            <span>Recent Orders</span>
+            <strong>{mockOrders.length}</strong>
+            <small>Latest account activity</small>
+          </article>
+          <article className="dashboard-summary-card">
+            <span>Invoices</span>
+            <strong>{mockOrders.length}</strong>
+            <small>Bank transfer records</small>
+          </article>
+          <article className="dashboard-summary-card">
+            <span>Certificates</span>
+            <strong>1</strong>
+            <small>Linked bullion certificate</small>
+          </article>
         </div>
-        <div className="split-actions">
-          <PrimaryButton onClick={() => setVerification("approved")} variant="secondary">
+        <section className="account-trust-card">
+          <div>
+            <span className="eyebrow">Account Trust</span>
+            <h2>{verificationMeta.label}</h2>
+            <p>{verificationMeta.body}</p>
+            <div className="split-actions">
+              <PrimaryButton href={verificationMeta.href}>{verificationMeta.action}</PrimaryButton>
+              <PrimaryButton href="serial-verification" variant="ghost">
+                Verify Serial
+              </PrimaryButton>
+            </div>
+          </div>
+          <OptimisedImage
+            src="/images/dashboard/account-verification.webp"
+            alt="Iconic Bullion account verification and trust confirmation"
+            className="account-trust-image"
+            priority
+            sizes="(max-width: 900px) 100vw, 32vw"
+          />
+        </section>
+        <div className="demo-controls" aria-label="Prototype verification controls">
+          <span>Prototype controls</span>
+          <button className="btn secondary" type="button" onClick={() => setVerification("approved")}>
             Demo: Approved
-          </PrimaryButton>
-          <PrimaryButton onClick={() => setVerification("pending")} variant="ghost">
+          </button>
+          <button className="btn ghost" type="button" onClick={() => setVerification("pending")}>
             Demo: Pending
-          </PrimaryButton>
+          </button>
         </div>
         <OrderHistory embedded />
+        <section className="dashboard-certificate-card">
+          <OptimisedImage src="/images/dashboard/certificate-preview.webp" alt="Gold bullion and certificate representing account certificate access" className="dashboard-certificate-image" sizes="(max-width: 900px) 100vw, 32vw" />
+          <div>
+            <span className="eyebrow">Your Certificates</span>
+            <h2>Iconic Bullion 10g Minted Gold Bar</h2>
+            <Info label="Serial" value="IB-10G-000219" />
+            <Info label="Status" value={<StatusPill tone="green">Verified</StatusPill>} />
+            <PrimaryButton href="certificate" variant="secondary">
+              View Certificate
+            </PrimaryButton>
+          </div>
+        </section>
+        <section className="dashboard-quick-actions">
+          <PrimaryButton href="bullion">Shop Bullion</PrimaryButton>
+          <PrimaryButton href="account/orders" variant="secondary">
+            View Orders
+          </PrimaryButton>
+          <PrimaryButton href="invoice" variant="ghost">
+            View Invoices
+          </PrimaryButton>
+        </section>
       </div>
     </section>
   );
@@ -2032,10 +2446,19 @@ function Dashboard({ verification, setVerification }: { verification: Verificati
 
 function OrderHistory({ embedded }: { embedded?: boolean }) {
   return (
-    <section className={embedded ? "panel" : "page-shell"}>
+    <section className={embedded ? "panel order-history-panel" : "page-shell"}>
       {!embedded && <SectionHead eyebrow="Orders" title="Order history" />}
+      {embedded && (
+        <div className="panel-head">
+          <div>
+            <span className="eyebrow">Orders</span>
+            <h2>Recent orders</h2>
+          </div>
+          <Link href="/account/orders">View all orders →</Link>
+        </div>
+      )}
       <div className="table-wrap">
-        <table>
+        <table className="orders-table">
           <thead>
             <tr>
               <th>Order #</th>
@@ -2045,21 +2468,29 @@ function OrderHistory({ embedded }: { embedded?: boolean }) {
               <th>Payment</th>
               <th>Fulfilment</th>
               <th>Invoice</th>
+              <th>Action</th>
             </tr>
           </thead>
           <tbody>
             {mockOrders.map((order) => (
               <tr key={order.orderNo}>
-                <td>
+                <td data-label="Order #">
                   <Link href="/order-detail">{order.orderNo}</Link>
                 </td>
-                <td>{order.date}</td>
-                <td>{order.products}</td>
-                <td>{formatAUD(order.amount)}</td>
-                <td>{order.payment}</td>
-                <td>{order.fulfilment}</td>
-                <td>
+                <td data-label="Date">{order.date}</td>
+                <td data-label="Products">{order.products}</td>
+                <td data-label="Amount">{formatAUD(order.amount)}</td>
+                <td data-label="Payment">
+                  <StatusPill tone={order.payment.includes("Pending") ? "gold" : "green"}>{order.payment}</StatusPill>
+                </td>
+                <td data-label="Fulfilment">{order.fulfilment}</td>
+                <td data-label="Invoice">
                   <Link href="/invoice">{order.invoiceNo}</Link>
+                </td>
+                <td data-label="Action">
+                  <Link className="table-action" href="/order-detail">
+                    View Order
+                  </Link>
                 </td>
               </tr>
             ))}
@@ -2163,62 +2594,150 @@ function InvoicePage({ lines, totals, fulfilment }: { lines: Array<CartLine & { 
   );
 }
 
-function LoginPage({ setVerification }: { setVerification: (state: VerificationState) => void }) {
+function AuthLayout({ eyebrow, title, text, children }: { eyebrow: string; title: string; text: string; children: React.ReactNode }) {
   return (
-    <section className="page-shell narrow">
-      <SectionHead eyebrow="Account" title="Sign in" />
-      <form className="form-card">
-        <label>
-          Email
-          <input type="email" placeholder="customer@example.com" />
-        </label>
-        <label>
-          Password
-          <input type="password" placeholder="••••••••" />
-        </label>
-        <PrimaryButton
-          onClick={() => {
-            setVerification("unverified");
-            window.location.href = href("account");
-          }}
-        >
-          Sign In
-        </PrimaryButton>
-        <div className="split-actions">
-          <Link href="/forgot-password">Forgot Password</Link>
-          <Link href="/signup">Create Account</Link>
-        </div>
-        <p>Verification is required before bullion purchase.</p>
-      </form>
+    <section className="auth-page">
+      <div className="auth-copy">
+        <span className="eyebrow">{eyebrow}</span>
+        <h1>{title}</h1>
+        <p>{text}</p>
+        {children}
+      </div>
+      <OptimisedImage src="/images/account/account-access.webp" alt="Iconic Bullion secure account access with gold bar and account ready card" className="auth-visual" priority sizes="(max-width: 900px) 100vw, 50vw" />
     </section>
   );
 }
 
-function AuthSimple({ title, text, action, next, password }: { title: string; text: string; action: string; next: string; password?: boolean }) {
+function AuthField({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
   return (
-    <section className="page-shell narrow">
-      <SectionHead eyebrow="Account" title={title} />
-      <form className="form-card">
-        <p>{text}</p>
-        <label>
-          Email
-          <input type="email" placeholder="customer@example.com" />
-        </label>
-        {password && (
-          <>
-            <label>
-              New Password
-              <input type="password" />
-            </label>
-            <label>
-              Confirm Password
-              <input type="password" />
-            </label>
-          </>
-        )}
-        <PrimaryButton href={next}>{action}</PrimaryButton>
+    <label className={cx("auth-field", error && "has-error")}>
+      <span>{label}</span>
+      {children}
+      {error && <small className="field-error">{error}</small>}
+    </label>
+  );
+}
+
+function PasswordInput({ value, onChange, show, setShow, placeholder = "Enter password" }: { value: string; onChange: (value: string) => void; show: boolean; setShow: (show: boolean) => void; placeholder?: string }) {
+  return (
+    <span className="password-input">
+      <input type={show ? "text" : "password"} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />
+      <button type="button" aria-label={show ? "Hide password" : "Show password"} onClick={() => setShow(!show)}>
+        {show ? <EyeOff size={17} /> : <Eye size={17} />}
+      </button>
+    </span>
+  );
+}
+
+function LoginPage({ setVerification }: { setVerification: (state: VerificationState) => void }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  function submitLogin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const nextErrors: Record<string, string> = {};
+    if (!isValidEmail(email)) nextErrors.email = "Please enter a valid email address.";
+    if (!password) nextErrors.password = "Password is required.";
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length) return;
+    setVerification("unverified");
+    window.location.href = href("account");
+  }
+
+  return (
+    <AuthLayout eyebrow="Account" title="Sign in" text="Access your Iconic Bullion account to manage orders, invoices, verification and certificates.">
+      <form className="auth-card auth-form" onSubmit={submitLogin} noValidate>
+        <AuthField label="Email" error={errors.email}>
+          <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="customer@example.com" />
+        </AuthField>
+        <AuthField label="Password" error={errors.password}>
+          <PasswordInput value={password} onChange={setPassword} show={showPassword} setShow={setShowPassword} />
+        </AuthField>
+        <PrimaryButton type="submit">Sign In</PrimaryButton>
+        <div className="auth-links">
+          <Link href="/forgot-password">Forgot Password</Link>
+          <Link href="/signup">Create Account</Link>
+        </div>
+        <p className="auth-note">Verification is required before bullion purchase.</p>
       </form>
-    </section>
+    </AuthLayout>
+  );
+}
+
+function ForgotPasswordPage() {
+  const [email, setEmail] = useState("");
+  const [error, setError] = useState("");
+
+  function submitForgot(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!isValidEmail(email)) {
+      setError("Please enter a valid email address.");
+      return;
+    }
+    window.location.href = href("reset-password");
+  }
+
+  return (
+    <AuthLayout eyebrow="Account" title="Reset your password" text="Enter the email linked to your Iconic Bullion account and continue to the secure reset step.">
+      <form className="auth-card auth-form" onSubmit={submitForgot} noValidate>
+        <AuthField label="Email" error={error}>
+          <input type="email" value={email} onChange={(event) => { setEmail(event.target.value); setError(""); }} placeholder="customer@example.com" />
+        </AuthField>
+        <PrimaryButton type="submit">Send Reset Link</PrimaryButton>
+        <div className="auth-links">
+          <Link href="/login">Return to Sign In</Link>
+        </div>
+      </form>
+    </AuthLayout>
+  );
+}
+
+function ResetPasswordPage() {
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  function submitReset(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const nextErrors: Record<string, string> = {};
+    if (password.length < 8) nextErrors.password = "Password must be at least 8 characters.";
+    if (!confirmPassword) nextErrors.confirmPassword = "Please confirm your new password.";
+    if (confirmPassword && password !== confirmPassword) nextErrors.confirmPassword = "Passwords do not match.";
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length) return;
+    window.location.href = href("password-reset-success");
+  }
+
+  return (
+    <AuthLayout eyebrow="Account" title="Choose a new password" text="Set a new password for secure account access.">
+      <form className="auth-card auth-form" onSubmit={submitReset} noValidate>
+        <AuthField label="New Password" error={errors.password}>
+          <PasswordInput value={password} onChange={setPassword} show={showPassword} setShow={setShowPassword} placeholder="New password" />
+        </AuthField>
+        <AuthField label="Confirm Password" error={errors.confirmPassword}>
+          <PasswordInput value={confirmPassword} onChange={setConfirmPassword} show={showConfirmPassword} setShow={setShowConfirmPassword} placeholder="Confirm password" />
+        </AuthField>
+        <PrimaryButton type="submit">Update Password</PrimaryButton>
+      </form>
+    </AuthLayout>
+  );
+}
+
+function AuthSuccessPage({ title, text, action, next }: { title: string; text: string; action: string; next: string }) {
+  return (
+    <AuthLayout eyebrow="Account" title={title} text={text}>
+      <div className="auth-card auth-success">
+        <span>
+          <Check size={24} />
+        </span>
+        <p>Secure access is ready. Verification status and trading permissions remain managed through the account area.</p>
+        <PrimaryButton href={next}>{action}</PrimaryButton>
+      </div>
+    </AuthLayout>
   );
 }
 
@@ -2299,93 +2818,400 @@ function SerialPage({ serial, setSerial }: { serial: string; setSerial: (serial:
 }
 
 function WholesalePage() {
+  const [values, setValues] = useState({
+    businessName: "",
+    contactName: "",
+    phone: "",
+    email: "",
+    abn: "",
+    products: "",
+    orderSize: "",
+    message: ""
+  });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitted, setSubmitted] = useState(false);
+
+  const fields = [
+    ["businessName", "Business Name", "text", "Iconic Trading Pty Ltd"],
+    ["contactName", "Contact Name", "text", "Avery Morgan"],
+    ["phone", "Phone", "tel", "+61 400 000 000"],
+    ["email", "Email", "email", "trade@example.com"],
+    ["abn", "ABN / ACN", "text", "12 345 678 901"],
+    ["products", "Products / Interest", "text", "1kg gold bars, minted bars"],
+    ["orderSize", "Preferred Order Size", "text", "Indicative weight or value"]
+  ] as const;
+
+  function updateWholesaleField(field: keyof typeof values, value: string) {
+    setValues((current) => ({ ...current, [field]: value }));
+    setErrors((current) => {
+      if (!current[field]) return current;
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
+  }
+
+  function submitWholesaleEnquiry(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const nextErrors: Record<string, string> = {};
+    if (!values.businessName.trim()) nextErrors.businessName = "Enter your business name.";
+    if (!values.contactName.trim()) nextErrors.contactName = "Enter a contact name.";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email.trim())) nextErrors.email = "Enter a valid email address.";
+    if (!values.message.trim()) nextErrors.message = "Tell us what you would like to discuss.";
+    setErrors(nextErrors);
+    setSubmitted(Object.keys(nextErrors).length === 0);
+  }
+
   return (
-    <section className="page-shell">
-      <section className="hero compact-hero">
-        <div className="hero-copy">
+    <section className="wholesale-page">
+      <section className="wholesale-hero">
+        <div className="wholesale-hero-copy">
           <span className="eyebrow">Wholesale</span>
           <h1>Bullion supply for trade and business customers</h1>
           <p>Enquire about weights, brands, bulk availability and business account verification.</p>
+          <p>We support trade, business and bulk bullion enquiries with a refined and transparent supply experience.</p>
+          <div className="split-actions">
+            <a className="btn primary" href="#wholesale-enquiry">
+              Wholesale Enquiry
+            </a>
+            <PrimaryButton href="bullion" variant="secondary">
+              View Bullion
+            </PrimaryButton>
+          </div>
         </div>
-        <PlaceholderImage src="/images/wholesale/wholesale-hero.jpg" />
+        <OptimisedImage
+          src="/images/wholesale/wholesale-hero.webp"
+          alt="Gold bullion prepared for wholesale and business supply"
+          className="wholesale-hero-image"
+          priority
+          sizes="(max-width: 900px) 100vw, 56vw"
+          position="center"
+        />
       </section>
-      <form className="form-card two-col">
-        {["Business Name", "Contact", "Phone", "Email", "ABN/ACN", "Products"].map((label) => (
-          <label key={label}>
-            {label}
-            <input />
+      <section className="wholesale-split stock">
+        <OptimisedImage src="/images/wholesale/wholesale-stock.webp" alt="Trade-ready bulk gold bullion inventory" className="wholesale-section-image" sizes="(max-width: 900px) 100vw, 48vw" />
+        <div className="wholesale-section-copy">
+          <span className="eyebrow">Trade Supply</span>
+          <h2>Trade-ready bullion supply</h2>
+          <p>Business customers can enquire about bulk availability, weight preferences, branded product requirements and account-based purchasing needs.</p>
+          <ul className="check-list wholesale-list">
+            <li>
+              <Check size={16} /> Range of bullion sizes
+            </li>
+            <li>
+              <Check size={16} /> Bulk supply discussions
+            </li>
+            <li>
+              <Check size={16} /> Trade and business enquiry handling
+            </li>
+            <li>
+              <Check size={16} /> Premium service and response
+            </li>
+          </ul>
+        </div>
+      </section>
+      <section className="wholesale-split consultation">
+        <div className="wholesale-section-copy">
+          <span className="eyebrow">Consultation</span>
+          <h2>Speak with us about your wholesale needs</h2>
+          <p>For trade, business and recurring supply discussions, send an enquiry and our team can assist with availability, product requirements and account setup.</p>
+          <a className="btn secondary" href="#wholesale-enquiry">
+            Start an Enquiry
+          </a>
+        </div>
+        <OptimisedImage
+          src="/images/wholesale/wholesale-consultation.webp"
+          alt="Business consultation for wholesale bullion enquiries"
+          className="wholesale-section-image"
+          sizes="(max-width: 900px) 100vw, 48vw"
+        />
+      </section>
+      <section className="wholesale-form-section" id="wholesale-enquiry" aria-labelledby="wholesale-form-title">
+        <div className="wholesale-form-intro">
+          <span className="eyebrow">Trade Enquiry</span>
+          <h2 id="wholesale-form-title">Wholesale enquiry</h2>
+          <p>Tell us about your business, the product types you are interested in, and any bulk or account-related requirements.</p>
+          <p>We will review your enquiry and come back to you regarding availability and next steps.</p>
+        </div>
+        <form className="wholesale-form" noValidate onSubmit={submitWholesaleEnquiry}>
+          {fields.map(([name, label, type, placeholder]) => (
+            <label key={name} className={errors[name] ? "has-error" : undefined}>
+              {label}
+              <input
+                type={type}
+                value={values[name]}
+                placeholder={placeholder}
+                aria-invalid={Boolean(errors[name])}
+                aria-describedby={errors[name] ? `${name}-error` : undefined}
+                onChange={(event) => updateWholesaleField(name, event.target.value)}
+              />
+              {errors[name] && (
+                <span className="field-error" id={`${name}-error`}>
+                  {errors[name]}
+                </span>
+              )}
+            </label>
+          ))}
+          <label className={cx("wide", errors.message && "has-error")}>
+            Message
+            <textarea
+              rows={5}
+              value={values.message}
+              placeholder="Share product requirements, timing, account needs or other trade enquiry details."
+              aria-invalid={Boolean(errors.message)}
+              aria-describedby={errors.message ? "message-error" : undefined}
+              onChange={(event) => updateWholesaleField("message", event.target.value)}
+            />
+            {errors.message && (
+              <span className="field-error" id="message-error">
+                {errors.message}
+              </span>
+            )}
           </label>
-        ))}
-        <label className="wide">
-          Message
-          <textarea rows={5} />
-        </label>
-        <PrimaryButton>Wholesale Enquiry</PrimaryButton>
-      </form>
+          <div className="wholesale-form-actions wide">
+            <PrimaryButton type="submit">Submit Wholesale Enquiry</PrimaryButton>
+            {submitted && (
+              <p className="form-success" role="status">
+                Thanks. Your wholesale enquiry has been captured in this prototype flow.
+              </p>
+            )}
+          </div>
+        </form>
+      </section>
+      <section className="wholesale-support">
+        <OptimisedImage src="/images/wholesale/wholesale-support.webp" alt="Wholesale bullion enquiry support" className="wholesale-support-image" sizes="(max-width: 900px) 100vw, 34vw" />
+        <div>
+          <span className="eyebrow">Business Supply Support</span>
+          <h2>Discuss availability and product range</h2>
+          <p>Wholesale enquiries may include business account discussions, product availability and supply requirements. Final fulfilment, pricing and trade arrangements are subject to confirmation.</p>
+        </div>
+      </section>
     </section>
   );
 }
 
 function AboutPage() {
   return (
-    <section className="page-shell">
-      <section className="split-section">
-        <PlaceholderImage src="/images/about/about-hero.jpg" />
-        <div>
+    <section className="about-page">
+      <section className="about-hero">
+        <OptimisedImage
+          src="/images/about/about-hero.webp"
+          alt="Premium gold bullion arranged to represent the Iconic Bullion brand"
+          className="about-hero-image"
+          priority
+          sizes="(max-width: 900px) 100vw, 56vw"
+          position="center"
+        />
+        <div className="about-hero-copy">
           <span className="eyebrow">About Iconic Bullion</span>
           <h1>Professional bullion service with a premium retail experience</h1>
-          <p>This prototype positions Iconic Bullion as a secure Australian bullion business with live pricing, verification-led purchasing and clear bank-transfer ordering.</p>
+          <p>Iconic Bullion is positioned as a secure Australian bullion business with live pricing, verification-led purchasing and clear bank-transfer ordering.</p>
+          <p>We aim to combine transparent bullion access with a premium customer experience built on trust, clarity and product confidence.</p>
         </div>
       </section>
-      <div className="three">
-        <MiniCard image="/images/about/bullion-expertise.jpg" title="Bullion expertise" body="Readable product information, margins and market references." />
-        <MiniCard image="/images/about/wholesale-heritage.jpg" title="Wholesale heritage" body="A dedicated enquiry path for business customers." />
+      <section className="about-positioning">
+        <span className="eyebrow">Principles</span>
+        <h2>What Iconic Bullion stands for</h2>
+        <p>A premium Australian bullion experience built around product clarity, transparent live pricing, verification-led purchasing and secure order handling.</p>
+      </section>
+      <section className="about-card-grid" aria-label="About Iconic Bullion strengths">
         <MiniCard
-          image="/images/home/verification-trust.webp"
-          imageAlt="Gold bullion bar displayed with authenticity certificate"
-          title="Security and trust"
-          body="Verification, invoices and fulfilment statuses are foregrounded."
+          image="/images/about/bullion-expertise.webp"
+          imageAlt="Gold bullion presented with product information to represent bullion expertise"
+          title="Bullion expertise"
+          body="Clear product information, pricing context and a straightforward bullion-buying experience."
         />
-      </div>
+        <MiniCard
+          image="/images/about/wholesale-heritage.webp"
+          imageAlt="Investment-grade gold bullion arranged to represent wholesale supply capability"
+          title="Wholesale heritage"
+          body="Support for business and trade enquiries through a dedicated wholesale pathway."
+        />
+        <MiniCard
+          image="/images/about/security-trust.webp"
+          imageAlt="Gold bullion and certificate representing security and trust"
+          title="Security and trust"
+          body="Verification-led purchasing, clear documentation and a more transparent customer journey."
+        />
+      </section>
+      <section className="about-cta">
+        <div>
+          <span className="eyebrow">Explore Iconic Bullion</span>
+          <h2>Continue with live pricing, bullion products or an enquiry.</h2>
+        </div>
+        <div className="split-actions">
+          <PrimaryButton href="bullion">Shop Bullion</PrimaryButton>
+          <PrimaryButton href="market" variant="secondary">
+            View Live Gold Price
+          </PrimaryButton>
+          <PrimaryButton href="contact" variant="ghost">
+            Enquire
+          </PrimaryButton>
+        </div>
+      </section>
     </section>
   );
 }
 
 function ContactPage() {
+  const [values, setValues] = useState({
+    category: "Bullion Product",
+    name: "",
+    email: "",
+    phone: "",
+    productReference: "",
+    message: ""
+  });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitted, setSubmitted] = useState(false);
+  const categories = ["Bullion Product", "Jewellery", "Product Availability", "Pricing", "Delivery", "Verification", "Wholesale", "General Enquiry"];
+
+  function updateContactField(field: keyof typeof values, value: string) {
+    setValues((current) => ({ ...current, [field]: value }));
+    setSubmitted(false);
+    setErrors((current) => {
+      if (!current[field]) return current;
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
+  }
+
+  function submitContactEnquiry(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const nextErrors: Record<string, string> = {};
+    if (!values.category.trim()) nextErrors.category = "Choose an enquiry category.";
+    if (!values.name.trim()) nextErrors.name = "Enter your name.";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email.trim())) nextErrors.email = "Enter a valid email address.";
+    if (!values.message.trim()) nextErrors.message = "Tell us what you need help with.";
+    setErrors(nextErrors);
+    setSubmitted(Object.keys(nextErrors).length === 0);
+  }
+
   return (
-    <section className="page-shell">
-      <SectionHead eyebrow="Contact" title="Make an enquiry" />
-      <div className="split-section">
-        <form className="form-card">
-          <label>
+    <section className="contact-page">
+      <section className="contact-hero">
+        <div className="contact-form-column">
+          <div className="contact-intro">
+            <span className="eyebrow">Contact</span>
+            <h1>Make an enquiry</h1>
+            <p>Tell us what you need help with and our team can assist with bullion products, pricing, availability, delivery, verification and wholesale enquiries.</p>
+          </div>
+          <form className="contact-form" noValidate onSubmit={submitContactEnquiry}>
+            <label className={errors.category ? "has-error" : undefined}>
             Category
-            <select>
-              {["Bullion Product", "Pricing", "Order/Payment", "Delivery", "Store Pickup", "Verification", "Wholesale", "General"].map((item) => (
+              <select
+                value={values.category}
+                aria-invalid={Boolean(errors.category)}
+                aria-describedby={errors.category ? "contact-category-error" : undefined}
+                onChange={(event) => updateContactField("category", event.target.value)}
+              >
+                {categories.map((item) => (
                 <option key={item}>{item}</option>
               ))}
             </select>
+              {errors.category && (
+                <span className="field-error" id="contact-category-error">
+                  {errors.category}
+                </span>
+              )}
           </label>
-          <label>
+            <label className={errors.name ? "has-error" : undefined}>
             Name
-            <input />
+              <input
+                value={values.name}
+                placeholder="Your name"
+                aria-invalid={Boolean(errors.name)}
+                aria-describedby={errors.name ? "contact-name-error" : undefined}
+                onChange={(event) => updateContactField("name", event.target.value)}
+              />
+              {errors.name && (
+                <span className="field-error" id="contact-name-error">
+                  {errors.name}
+                </span>
+              )}
           </label>
-          <label>
+            <label className={errors.email ? "has-error" : undefined}>
             Email
-            <input type="email" />
+              <input
+                type="email"
+                value={values.email}
+                placeholder="you@example.com"
+                aria-invalid={Boolean(errors.email)}
+                aria-describedby={errors.email ? "contact-email-error" : undefined}
+                onChange={(event) => updateContactField("email", event.target.value)}
+              />
+              {errors.email && (
+                <span className="field-error" id="contact-email-error">
+                  {errors.email}
+                </span>
+              )}
           </label>
-          <label>
+            <label>
+              Phone
+              <input type="tel" value={values.phone} placeholder="+61 400 000 000" onChange={(event) => updateContactField("phone", event.target.value)} />
+            </label>
+            <label className="wide">
+              Product / Reference
+              <input value={values.productReference} placeholder="Product, order or serial reference if relevant" onChange={(event) => updateContactField("productReference", event.target.value)} />
+            </label>
+            <label className={cx("wide", errors.message && "has-error")}>
             Message
-            <textarea rows={5} />
+              <textarea
+                rows={5}
+                value={values.message}
+                placeholder="Share product questions, pricing needs, delivery details or other enquiry context."
+                aria-invalid={Boolean(errors.message)}
+                aria-describedby={errors.message ? "contact-message-error" : undefined}
+                onChange={(event) => updateContactField("message", event.target.value)}
+              />
+              {errors.message && (
+                <span className="field-error" id="contact-message-error">
+                  {errors.message}
+                </span>
+              )}
           </label>
-          <PrimaryButton>Send Enquiry</PrimaryButton>
+            <div className="contact-form-actions wide">
+              <PrimaryButton type="submit">Send Enquiry</PrimaryButton>
+              {submitted && (
+                <p className="form-success" role="status">
+                  Thanks. Your enquiry has been captured in this prototype flow.
+                </p>
+              )}
+            </div>
         </form>
-        <div className="panel">
-          <PlaceholderImage src="/images/contact/contact-hero.jpg" />
-          <Info label="Phone" value="+61 3 0000 0000" />
-          <Info label="Email" value="hello@iconicbullion.example" />
-          <Info label="Store" value="Melbourne CBD placeholder" />
         </div>
-      </div>
+        <aside className="contact-side-panel" aria-label="Contact details">
+          <OptimisedImage
+            src="/images/contact/contact-hero.webp"
+            alt="Premium customer consultation environment for Iconic Bullion enquiries"
+            className="contact-hero-image"
+            priority
+            sizes="(max-width: 900px) 100vw, 42vw"
+          />
+          <div className="contact-details">
+            <Info label="Phone" value="+61 3 0000 0000" />
+            <Info label="Email" value="hello@iconicbullion.example" />
+            <Info label="Address" value="Future business address placeholder" />
+          </div>
+        </aside>
+      </section>
+      <section className="contact-support">
+        <OptimisedImage src="/images/contact/contact-support.webp" alt="Secure bullion pickup and consultation support" className="contact-support-image" sizes="(max-width: 900px) 100vw, 44vw" />
+        <div>
+          <span className="eyebrow">Customer Support</span>
+          <h2>Support for pickup, delivery and order assistance</h2>
+          <p>We can assist with questions related to store pickup, insured delivery, product collection, order support and other customer-service enquiries.</p>
+          <div className="split-actions">
+            <PrimaryButton href="bullion" variant="secondary">
+              View Bullion
+            </PrimaryButton>
+            <PrimaryButton href="market" variant="ghost">
+              Explore Live Gold Pricing
+            </PrimaryButton>
+          </div>
+        </div>
+      </section>
     </section>
   );
 }

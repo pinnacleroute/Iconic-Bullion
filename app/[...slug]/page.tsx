@@ -18,6 +18,8 @@ const staticRoutes = [
   "login",
   "forgot-password",
   "reset-password",
+  "password-reset-success",
+  "account-created",
   "verification-pending",
   "verification-approved",
   "verification-declined",
