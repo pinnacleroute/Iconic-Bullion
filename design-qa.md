@@ -39,6 +39,23 @@ final result: passed
 
 ---
 
+**Bullion Filter Overlap Refinement QA — 2026-09-20**
+- Source visual: `/Users/amankumarsingh/Desktop/Screenshot 2026-09-20 at 12.06.04 PM.png` (2344 × 1676 at 2×, normalized to 1172 × 838 CSS px)
+- Implementation: `http://localhost:3000/bullion/`, captured in the Codex in-app browser at 1172 × 838 CSS px
+- States checked: default, `Minted Bars` selected, clear-all reset, and 394px mobile layout
+
+**Findings**
+- Initial P1: global form spacing leaked into the compact filter inputs, causing checkbox and label collisions.
+- Fixed by isolating checkbox dimensions and padding, using explicit grid placement, widening the rail to 260px, and adding restrained hover, selected, and keyboard-focus states.
+- Browser measurements across sampled rows show fixed 16 × 16px controls, a 12px visible control-to-copy separation, safe wrapping for long manufacturers, and `overlaps: false` throughout.
+- Typography, brand colors, product imagery, and copy remain faithful to the existing page. No P0/P1/P2 issues remain; native text-rendering variance is accepted as P3.
+- Interaction checks passed: selecting a filter updates results and the active chip; Clear all restores the default state.
+- Browser console warnings/errors: none. `npm run typecheck` and `npm run build`: passed.
+
+final result: passed
+
+---
+
 **Bullion Listing Filter And Sort QA**
 - Source visual: `/var/folders/jq/p0ttr61j475746h5f8g4zvz80000gn/T/codex-clipboard-f77d5e2c-0e26-40e4-8a9f-e43ff1f8ff81.png`
 - Implementation route checked: `/bullion/`
