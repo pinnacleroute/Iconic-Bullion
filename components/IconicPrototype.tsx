@@ -514,14 +514,30 @@ function ProductCard({
         <ProductMedia src={product.image} alt={`${product.brand} ${product.name}`} />
       </Link>
       <div className="product-copy">
-        {showcase && <span className="live-price-label">Live Price</span>}
-        <span className="eyebrow">{product.brand}</span>
-        <h3>{product.name}</h3>
-        <p>
-          {product.weightLabel} · {product.purity}
-        </p>
-        {!showcase && <span className="live-price-label">Live Price</span>}
-        {product.iconicSerialEligible && !showcase && <span className="serial-note">Serial verification</span>}
+        <div className="product-identity">
+          {showcase && <span className="live-price-label">Live Price</span>}
+          <span className="eyebrow">{product.brand}</span>
+          <h3>{product.name}</h3>
+          <p>
+            {product.weightLabel} · {product.purity}
+          </p>
+          {!showcase && <span className="live-price-label">Live Price</span>}
+          {product.iconicSerialEligible && !showcase && <span className="serial-note">Serial verification</span>}
+        </div>
+        <div className="product-list-meta" aria-label="Product details">
+          <span>
+            <small>Weight</small>
+            <strong>{product.weightLabel}</strong>
+          </span>
+          <span>
+            <small>Purity</small>
+            <strong>{product.purity}</strong>
+          </span>
+          <span>
+            <small>Format</small>
+            <strong>{product.type}</strong>
+          </span>
+        </div>
         <div className="price-row">
           <strong>{displayPrice || formatAUD(price)}</strong>
           <StatusPill tone={product.availability === "In Stock" ? "green" : product.availability === "Low Stock" ? "gold" : "neutral"}>
