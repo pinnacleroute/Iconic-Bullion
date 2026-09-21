@@ -297,7 +297,7 @@ function EmptyState({
 
   return (
     <section className={cx("empty-state", `empty-state-${variant}`, compact && "compact")}>
-      {showImage && <OptimisedImage src={image} alt={imageAlt} className="empty-state-image" sizes={compact ? "(max-width: 900px) 84vw, 360px" : "(max-width: 900px) 84vw, 560px"} />}
+      {showImage && <OptimisedImage src={image} alt={imageAlt} className="empty-state-image" sizes={compact ? "(max-width: 900px) 88vw, 520px" : "(max-width: 900px) 88vw, 760px"} />}
       <div className="empty-state-copy">
         <h2>{title}</h2>
         <p>{description}</p>

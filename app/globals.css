@@ -5087,7 +5087,7 @@ th {
   width: 100%;
   display: grid;
   justify-items: center;
-  gap: 22px;
+  gap: 18px;
   padding: clamp(28px, 4vw, 54px);
   border: 1px solid rgba(230, 225, 215, 0.86);
   background: rgba(252, 251, 247, 0.86);
@@ -5095,13 +5095,14 @@ th {
 }
 
 .empty-state-image {
-  width: min(58%, 600px);
-  min-height: 230px;
+  width: min(78%, 760px);
+  min-height: clamp(260px, 18vw, 330px);
   border: 0;
   background: transparent;
 }
 
 .empty-state-image img {
+  object-fit: cover;
   object-position: center;
 }
 
@@ -5131,8 +5132,8 @@ th {
 }
 
 .empty-state.compact .empty-state-image {
-  width: min(56%, 460px);
-  min-height: 170px;
+  width: min(72%, 520px);
+  min-height: clamp(190px, 16vw, 250px);
 }
 
 .empty-state.compact .empty-state-copy h2 {
