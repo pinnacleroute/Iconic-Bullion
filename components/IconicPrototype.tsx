@@ -378,6 +378,18 @@ function Header({
     [verification === "logged-out" ? "Sign In" : "Account", verification === "logged-out" ? "login" : "account"]
   ];
   const isActiveNav = (route: string) => activeRoute === route || (route === "bullion" && ["buy-sell", "product"].includes(activeRoute));
+
+  useEffect(() => {
+    if (!open) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open]);
+
   return (
     <header className="site-header">
       <div className="topbar">
@@ -404,14 +416,14 @@ function Header({
             <span>{cartCount}</span>
           </Link>
         </nav>
-        <button className="icon-button mobile-only" onClick={() => setOpen(true)} aria-label="Open menu">
+        <button className="icon-button mobile-only" type="button" onClick={() => setOpen(true)} aria-label="Open menu">
           <Menu size={22} />
         </button>
       </div>
       <LivePriceStrip market={market} currency={currency} onCurrency={onCurrency} />
       {open && (
         <div className="drawer" role="dialog" aria-modal="true" aria-label="Mobile navigation">
-          <button className="icon-button close" onClick={() => setOpen(false)} aria-label="Close menu">
+          <button className="icon-button close" type="button" onClick={() => setOpen(false)} aria-label="Close menu">
             <X size={22} />
           </button>
           {[...nav, ...actions, ["Cart", "cart"], ["Serial Verification", "serial-verification"]].map(([label, route]) => (
@@ -603,8 +615,12 @@ function CertificatePanel({ printable = false, autoPrint = false }: { printable?
         <Info label="Issue Date" value={cert.issueDate} />
       </div>
       <div className="barcode-box" aria-label="QR and barcode placeholder">
-        <Barcode size={64} />
-        <span>QR / barcode placeholder</span>
+        <div>
+          <Barcode size={58} />
+          <strong>{cert.serial}</strong>
+          <span>QR / barcode placeholder</span>
+        </div>
+        <p>Scan to verify this certificate against Iconic Bullion records.</p>
       </div>
       <div className="split-actions no-print">
         <button className="btn primary" onClick={() => window.print()}>
@@ -2574,15 +2590,17 @@ function Summary({
   to,
   fulfilment,
   setFulfilment,
-  blockedReason
+  blockedReason,
+  showPaymentMethod = true
 }: {
   totals: { subtotal: number; deliveryFee: number; total: number };
   secondsLeft: number;
-  cta: string;
+  cta?: string;
   to?: string;
   fulfilment?: Fulfilment;
   setFulfilment?: (fulfilment: Fulfilment) => void;
   blockedReason?: string;
+  showPaymentMethod?: boolean;
 }) {
   return (
     <aside className="summary">
@@ -2606,16 +2624,18 @@ function Summary({
       <Info label="Subtotal" value={formatAUD(totals.subtotal)} />
       <Info label="Delivery / insurance" value={totals.deliveryFee ? formatAUD(totals.deliveryFee) : "Free"} />
       <Info label="Grand total" value={formatAUD(totals.total)} />
-      <div className="bank-box compact">
-        <Banknote />
-        <div>
-          <strong>Payment Method: Bank Transfer</strong>
-          <p>No card or wallet payment options are included.</p>
+      {showPaymentMethod && (
+        <div className="bank-box compact">
+          <Banknote />
+          <div>
+            <strong>Payment Method: Bank Transfer</strong>
+            <p>No card or wallet payment options are included.</p>
+          </div>
         </div>
-      </div>
+      )}
       {blockedReason && <p className="summary-blocked" role="status">{blockedReason}</p>}
-      {to && <PrimaryButton href={to}>{cta}</PrimaryButton>}
-      {!to && <button className="btn primary disabled" type="button" disabled>{cta}</button>}
+      {cta && to && <PrimaryButton href={to}>{cta}</PrimaryButton>}
+      {cta && !to && <button className="btn primary disabled" type="button" disabled>{cta}</button>}
     </aside>
   );
 }
@@ -2646,7 +2666,7 @@ function CheckoutPage({
     );
   }
   return (
-    <section className="page-shell">
+    <section className="page-shell checkout-page">
       <SectionHead eyebrow="Checkout" title="Review order and bank transfer details" />
       <div className="checkout-layout">
         <div className="form-card">
@@ -2684,11 +2704,12 @@ function CheckoutPage({
           <label className="checkbox">
             <input type="checkbox" checked={ack} onChange={(event) => setAck(event.target.checked)} />I acknowledge that bullion orders are subject to Iconic Bullion's cancellation and refund policy.
           </label>
+          {!ack && <p className="checkout-action-note">Acknowledge the cancellation and refund policy to place the order.</p>}
           <PrimaryButton onClick={placeOrder} disabled={!ack || lines.length === 0}>
             Place Order
           </PrimaryButton>
         </div>
-        <Summary totals={totals} secondsLeft={secondsLeft} cta="Place Order" />
+        <Summary totals={totals} secondsLeft={secondsLeft} showPaymentMethod={false} />
       </div>
     </section>
   );
@@ -4139,8 +4160,17 @@ function ContactPage() {
 
 function FAQPage() {
   return (
-    <section className="page-shell narrow">
-      <SectionHead eyebrow="FAQ" title="Bullion support topics" />
+    <section className="page-shell faq-page">
+      <div className="faq-intro">
+        <SectionHead eyebrow="FAQ" title="Bullion support topics" subtitle="Answers to common account, pricing, fulfilment and verification questions for the Iconic Bullion prototype." />
+        <div className="faq-support-card">
+          <span className="eyebrow gold">Need assistance?</span>
+          <p>For order support, wholesale requirements or account questions, contact the Iconic Bullion team.</p>
+          <PrimaryButton href="contact" variant="secondary">
+            Enquire
+          </PrimaryButton>
+        </div>
+      </div>
       <FAQAccordion />
     </section>
   );
@@ -4154,18 +4184,72 @@ function PolicyPage({ route }: { route: string }) {
     "refund-policy": "Refund & Cancellation Policy",
     "bullion-trading-policy": "Bullion Trading / KYC Policy"
   };
+  const sharedSections: Record<string, Array<[string, string]>> = {
+    terms: [
+      ["Account eligibility", "Customers must create an account and complete verification before bullion purchasing is enabled. Company accounts may require authorised representative details."],
+      ["Market-linked pricing", "Bullion prices are linked to the displayed market reference and may include product-specific pricing. Prices shown in this prototype are simulated."],
+      ["Price lock", "Eligible cart prices are temporarily locked for ten minutes while checkout is completed. Expired locks refresh against the latest available prototype market rate."],
+      ["Payment method", "Orders are represented as bank-transfer only. No card, wallet or live payment gateway is active in this prototype."],
+      ["Fulfilment", "Orders may be represented as store pickup or insured delivery. Delivery pricing and carrier rules remain placeholder configuration until production setup."],
+      ["Cancellations and refunds", "Bullion cancellation and refund wording must be finalised by the business and legal advisers before launch."]
+    ],
+    privacy: [
+      ["Information represented", "The prototype includes account, verification, order, invoice, certificate and contact fields to demonstrate intended workflows."],
+      ["Account data", "Account screens may represent names, email addresses, mobile numbers, company details and account status for demonstration purposes."],
+      ["Verification data", "Identity verification is simulated. No live GreenID, document verification or biometric provider is connected in this prototype."],
+      ["Order records", "Prototype order, invoice and certificate records are mock data and should not be treated as production customer records."],
+      ["Third-party services", "Final privacy wording should disclose any production providers for payments, verification, accounting, courier services, analytics and email."],
+      ["Storage and retention", "Production storage, retention, access, correction and deletion rules must be reviewed before launch."],
+      ["Customer contact", "Final wording should explain how customers can contact Iconic Bullion about privacy questions or account data requests."]
+    ],
+    "delivery-policy": [
+      ["Store pickup", "Store pickup is represented as free in the prototype. Production pickup timing, identification requirements and collection location must be confirmed."],
+      ["Insured delivery", "Insured delivery is represented by placeholder pricing. Courier eligibility, insurance limits and delivery restrictions require final configuration."],
+      ["Dispatch timing", "Fulfilment begins after payment confirmation. Prototype timing does not represent a binding production service level."],
+      ["Delivery status", "Delivery status screens are illustrative and are not connected to live courier tracking."]
+    ],
+    "refund-policy": [
+      ["Bullion order finality", "Current business instruction indicates bullion sales are not cancellable or refundable once an order is placed, subject to final legal wording."],
+      ["Market movement", "Because bullion pricing is market-linked, price movement after order placement is not represented as a refund reason in this prototype."],
+      ["Review requirement", "The final refund and cancellation policy should be reviewed against applicable consumer law before launch."],
+      ["Support path", "Customers should contact Iconic Bullion support for order-specific questions or exceptional review requests."]
+    ],
+    "bullion-trading-policy": [
+      ["Verification before trading", "Account verification is required before bullion purchasing is enabled for individuals and Australian companies."],
+      ["KYC workflow", "The prototype represents a manual review workflow and does not connect to a live GreenID or equivalent provider."],
+      ["Company accounts", "Australian company accounts may require business details, ABN/ACN information and an authorised representative."],
+      ["Trading controls", "Product availability, stock limits, price locks and payment requirements are represented as prototype controls."],
+      ["Record keeping", "Orders, invoices and certificates are represented for account record visibility and should be connected to production systems before launch."]
+    ]
+  };
+  const sections = sharedSections[route] || sharedSections.terms;
   return (
-    <section className="page-shell legal">
-      <span className="eyebrow">Policy</span>
-      <h1>{titles[route]}</h1>
-      <p>
-        This page contains prototype legal content only. Final wording should be reviewed and approved by the client and legal advisers before production launch.
-      </p>
-      {route === "refund-policy" && <p className="notice">Bullion sales: no cancellation / refund according to current business instruction.</p>}
-      {route === "delivery-policy" && <p>Store pickup is free. Insured delivery is represented by configurable placeholder pricing pending shipping configuration.</p>}
-      {route === "bullion-trading-policy" && <p>Account creation and verification are required before bullion purchasing is enabled for individuals and Australian companies.</p>}
-      <h2>Prototype scope</h2>
-      <p>No live payment, GreenID, MYOB, courier, email or market-price API integrations are active in this prototype.</p>
+    <section className="page-shell legal policy-page">
+      <div className="policy-hero">
+        <div>
+          <span className="eyebrow">Policy</span>
+          <h1>{titles[route]}</h1>
+        </div>
+        <p>This page contains prototype legal content only. Final wording should be reviewed and approved by the client and legal advisers before production launch.</p>
+      </div>
+      <div className="policy-layout">
+        <aside className="policy-aside">
+          <span className="eyebrow gold">Prototype scope</span>
+          <p>No live payment, GreenID, MYOB, courier, email or market-price API integrations are active in this prototype.</p>
+          {route === "refund-policy" && <p className="notice">Bullion sales: no cancellation / refund according to current business instruction.</p>}
+        </aside>
+        <div className="policy-sections">
+          {sections.map(([title, body], index) => (
+            <article key={title}>
+              <span>{String(index + 1).padStart(2, "0")}</span>
+              <div>
+                <h2>{title}</h2>
+                <p>{body}</p>
+              </div>
+            </article>
+          ))}
+        </div>
+      </div>
     </section>
   );
 }
