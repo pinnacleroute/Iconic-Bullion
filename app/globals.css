@@ -4723,6 +4723,278 @@ th {
   text-align: left;
 }
 
+.order-detail-page {
+  gap: clamp(24px, 3vw, 42px);
+  padding-top: clamp(58px, 6vw, 96px);
+  padding-bottom: clamp(70px, 7vw, 120px);
+}
+
+.order-detail-header {
+  display: grid;
+  gap: 12px;
+}
+
+.order-detail-header h1 {
+  margin: 0;
+}
+
+.order-detail-header p {
+  max-width: 680px;
+  color: var(--muted);
+  font-size: var(--text-body-lg);
+}
+
+.order-progress {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.order-progress::before {
+  content: "";
+  position: absolute;
+  top: 18px;
+  left: 24px;
+  right: 24px;
+  height: 1px;
+  background: var(--border);
+}
+
+.order-progress li {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  padding: 0 10px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.order-progress li span {
+  width: 36px;
+  height: 36px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--paper);
+  color: var(--green);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.order-progress li strong {
+  max-width: 140px;
+  color: inherit;
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.order-progress li.completed,
+.order-progress li.current {
+  color: var(--green);
+}
+
+.order-progress li.completed span {
+  border-color: var(--green);
+  background: var(--green);
+  color: #fff;
+}
+
+.order-progress li.current span {
+  border-color: var(--gold);
+  background: #fffaf0;
+  color: var(--green);
+  box-shadow: 0 0 0 5px rgba(183, 154, 91, 0.14);
+}
+
+.order-detail-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.04fr) minmax(360px, 0.72fr);
+  gap: clamp(22px, 3vw, 42px);
+  align-items: start;
+}
+
+.order-detail-summary-area {
+  grid-column: 1;
+  grid-row: 1;
+  display: grid;
+  gap: clamp(18px, 2vw, 26px);
+}
+
+.order-detail-action-area {
+  grid-column: 2;
+  grid-row: 1;
+  display: grid;
+  gap: clamp(18px, 2vw, 26px);
+}
+
+.payment-required-panel {
+  display: grid;
+  gap: 20px;
+  background:
+    linear-gradient(135deg, rgba(238, 245, 243, 0.9), rgba(252, 251, 247, 0) 58%),
+    var(--paper);
+}
+
+.payment-required-panel h2,
+.order-products-panel h2,
+.tracking-summary-panel h2,
+.order-activity-panel h2 {
+  margin: 0;
+  font-size: clamp(1.65rem, 2vw, 2.2rem);
+}
+
+.payment-required-panel p {
+  color: var(--muted);
+  line-height: 1.75;
+}
+
+.payment-action-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.payment-action-facts .info {
+  background: rgba(252, 251, 247, 0.7);
+}
+
+.order-status-visual {
+  min-height: clamp(330px, 30vw, 520px);
+  aspect-ratio: 4 / 3;
+}
+
+.order-product-list {
+  display: grid;
+  gap: 14px;
+}
+
+.order-product-row {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr) minmax(250px, 0.8fr);
+  gap: 18px;
+  align-items: center;
+  padding: 16px;
+  border: 1px solid var(--border);
+  background: rgba(252, 251, 247, 0.55);
+}
+
+.order-product-thumb {
+  min-height: 112px;
+  aspect-ratio: 1;
+}
+
+.order-product-row h3 {
+  margin: 4px 0;
+  font-size: 1rem;
+}
+
+.order-product-row p {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.order-product-row dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.order-product-row dt {
+  color: var(--muted);
+  font-size: var(--text-eyebrow);
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.order-product-row dd {
+  margin: 4px 0 0;
+  color: var(--green);
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.tracking-summary-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.order-total-callout {
+  display: grid;
+  gap: 4px;
+  padding: 18px;
+  border: 1px solid rgba(183, 154, 91, 0.38);
+  background: #fffaf0;
+}
+
+.order-total-callout span,
+.order-total-callout small,
+.gold-reference-info small {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.order-total-callout strong {
+  color: var(--green);
+  font-size: clamp(1.65rem, 2.2vw, 2.4rem);
+  font-weight: 500;
+}
+
+.tracking-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.gold-reference-info {
+  grid-column: 1 / -1;
+}
+
+.order-activity-panel {
+  display: grid;
+  gap: 4px;
+}
+
+.order-activity-list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.order-activity-list li {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 18px;
+  padding: 18px 0;
+  border-top: 1px solid var(--border);
+}
+
+.order-activity-list li > span {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.order-activity-list strong {
+  color: var(--green);
+}
+
+.order-activity-list p {
+  margin-top: 4px;
+  color: var(--muted);
+}
+
 .dashboard {
   grid-template-columns: minmax(190px, 220px) minmax(0, 1fr);
   gap: clamp(24px, 3.2vw, 48px);
@@ -5862,6 +6134,54 @@ th {
   }
 }
 
+@media (max-width: 980px) {
+  .order-progress {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+
+  .order-progress::before {
+    top: 18px;
+    bottom: 18px;
+    left: 18px;
+    right: auto;
+    width: 1px;
+    height: auto;
+  }
+
+  .order-progress li {
+    grid-template-columns: 36px minmax(0, 1fr);
+    justify-items: start;
+    padding: 0;
+    text-align: left;
+  }
+
+  .order-progress li strong {
+    max-width: none;
+    align-self: center;
+  }
+
+  .order-detail-layout,
+  .order-detail-summary-area,
+  .order-detail-action-area {
+    grid-template-columns: 1fr;
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .order-detail-action-area {
+    order: -1;
+  }
+
+  .order-product-row {
+    grid-template-columns: 96px minmax(0, 1fr);
+  }
+
+  .order-product-row dl {
+    grid-column: 1 / -1;
+  }
+}
+
 @media (max-width: 640px) {
   .topbar,
   .price-strip,
@@ -6017,6 +6337,33 @@ th {
 
   .payment-next-panel {
     padding: 22px;
+  }
+
+  .order-detail-page {
+    gap: 22px;
+  }
+
+  .payment-action-facts,
+  .tracking-summary-grid,
+  .order-product-row dl {
+    grid-template-columns: 1fr;
+  }
+
+  .order-product-row {
+    grid-template-columns: 1fr;
+  }
+
+  .order-product-thumb {
+    width: min(100%, 190px);
+  }
+
+  .order-status-visual {
+    min-height: 260px;
+  }
+
+  .order-activity-list li {
+    grid-template-columns: 1fr;
+    gap: 6px;
   }
 
   .bullion-listing-page .filters {

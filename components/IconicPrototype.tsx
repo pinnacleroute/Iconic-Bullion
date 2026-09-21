@@ -3011,27 +3011,204 @@ function OrderHistory({ embedded }: { embedded?: boolean }) {
   );
 }
 
+type OrderTrackingStepState = "completed" | "current" | "upcoming";
+type OrderTrackingItem = {
+  productId: string;
+  quantity: number;
+  lockedPrice: number;
+};
+type OrderTrackingRecord = {
+  orderNumber: string;
+  placedDate: string;
+  placedDateShort: string;
+  status: "Pending for Payment";
+  fulfilment: Fulfilment;
+  invoiceNumber: string;
+  certificateNumber?: string;
+  certificateIssued: boolean;
+  marketReferenceAudPerOz: number;
+  items: OrderTrackingItem[];
+  activity: Array<{ date: string; title: string; detail: string }>;
+};
+
+const orderTrackingRecord: OrderTrackingRecord = {
+  orderNumber: "IB-10472",
+  placedDate: "18 September 2026",
+  placedDateShort: "18 Sep 2026",
+  status: "Pending for Payment",
+  fulfilment: "pickup",
+  invoiceNumber: "INV-2026-0188",
+  certificateNumber: "IB-10G-000219",
+  certificateIssued: false,
+  marketReferenceAudPerOz: marketSnapshot.audPerOz,
+  items: [
+    {
+      productId: "iconic-10g",
+      quantity: 1,
+      lockedPrice: calculateProductBullionPrice(products.find((product) => product.id === "iconic-10g") ?? products[2], marketSnapshot)
+    }
+  ],
+  activity: [
+    { date: "18 Sep 2026", title: "Order placed", detail: "Your bullion order was received by Iconic Bullion." },
+    { date: "18 Sep 2026", title: "Invoice generated", detail: "Invoice INV-2026-0188 was issued for bank transfer." },
+    { date: "Pending", title: "Awaiting bank transfer", detail: "Payment will be verified manually once funds arrive." }
+  ]
+};
+
 function OrderDetail() {
-  const timeline = ["Order Placed", "Pending for Payment", "Payment Confirmed", "Processing", "Ready for Pickup / Shipped", "Completed"];
+  const order = orderTrackingRecord;
+  const fulfilmentLabel = order.fulfilment === "pickup" ? "Store Pickup" : "Insured Delivery";
+  const trackingSteps = [
+    "Order Placed",
+    "Pending for Payment",
+    "Payment Confirmed",
+    "Processing",
+    order.fulfilment === "pickup" ? "Ready for Pickup" : "Shipped",
+    order.fulfilment === "pickup" ? "Collected / Completed" : "Delivered / Completed"
+  ];
+  const currentStepIndex = trackingSteps.findIndex((step) => step === order.status);
+  const lines = order.items.map((item) => ({
+    ...item,
+    product: products.find((product) => product.id === item.productId) ?? products[2],
+    lineTotal: item.lockedPrice * item.quantity
+  }));
+  const orderTotal = lines.reduce((total, line) => total + line.lineTotal, 0);
+  const summaryItems = [
+    ["Order Date", order.placedDate],
+    ["Payment Status", order.status],
+    ["Fulfilment Method", fulfilmentLabel],
+    ["Invoice", <Link key="invoice" href="/invoice">{order.invoiceNumber}</Link>],
+    [
+      "Certificate",
+      order.certificateIssued && order.certificateNumber ? (
+        <Link key="certificate" href="/certificate">{order.certificateNumber}</Link>
+      ) : (
+        "Certificate will become available once issued."
+      )
+    ]
+  ];
+
   return (
-    <section className="page-shell">
-      <SectionHead eyebrow="Track order" title="Order IB-10472" />
-      <div className="timeline">
-        {timeline.map((item, index) => (
-          <div key={item} className={index < 2 ? "active" : ""}>
-            <span>{index + 1}</span>
-            <strong>{item}</strong>
-          </div>
-        ))}
+    <section className="page-shell order-detail-page">
+      <div className="order-detail-header">
+        <span className="eyebrow">Track order</span>
+        <h1>Order {order.orderNumber}</h1>
+        <p>{`Placed ${order.placedDate} · ${order.status}`}</p>
       </div>
-      <div className="split-section">
-        <div className="panel">
-          <Info label="Market price at purchase" value={`${formatAUD(marketSnapshot.audPerOz)} / oz`} />
-          <Info label="Fulfilment" value="Store Pickup" />
-          <Info label="Invoice" value={<Link href="/invoice">INV-2026-0188</Link>} />
-          <Info label="Certificate" value={<Link href="/certificate">IB-10G-000219</Link>} />
+
+      <ol className="order-progress" aria-label="Order progress">
+        {trackingSteps.map((step, index) => {
+          const state: OrderTrackingStepState = index < currentStepIndex ? "completed" : index === currentStepIndex ? "current" : "upcoming";
+          return (
+            <li key={step} className={state} aria-current={state === "current" ? "step" : undefined}>
+              <span>{index + 1}</span>
+              <strong>{step}</strong>
+            </li>
+          );
+        })}
+      </ol>
+
+      <div className="order-detail-layout">
+        <aside className="order-detail-action-area" aria-label="Payment action and order visual">
+          <div className="panel payment-required-panel">
+            <div>
+              <span className="eyebrow">Next action</span>
+              <h2>Payment required</h2>
+            </div>
+            <p>Transfer the invoice amount using the bank details provided on your invoice. Your order will move to Payment Confirmed once the payment has been verified.</p>
+            <div className="payment-action-facts">
+              <Info label="Amount Due" value={formatAUD(orderTotal)} />
+              <Info label="Method" value="Bank Transfer" />
+            </div>
+            <div className="split-actions">
+              <PrimaryButton href="invoice">View Invoice</PrimaryButton>
+              <PrimaryButton href="invoice" variant="secondary">Payment Instructions</PrimaryButton>
+            </div>
+          </div>
+          <OptimisedImage
+            src="/images/orders/order-status.webp"
+            alt="Iconic Bullion packaged order with gold bars, fulfilment box and order detail paperwork"
+            className="order-status-visual"
+            sizes="(max-width: 980px) 100vw, 44vw"
+            priority
+          />
+        </aside>
+
+        <div className="order-detail-summary-area">
+          <div className="panel order-products-panel">
+            <div className="panel-head">
+              <div>
+                <span className="eyebrow">Order items</span>
+                <h2>Product summary</h2>
+              </div>
+              <StatusPill tone="gold">{order.status}</StatusPill>
+            </div>
+            <div className="order-product-list">
+              {lines.map((line) => (
+                <article key={line.productId} className="order-product-row">
+                  <ProductMedia src={line.product.image} alt={`${line.product.brand} ${line.product.name}`} className="order-product-thumb" />
+                  <div>
+                    <span className="eyebrow">{line.product.brand}</span>
+                    <h3>{line.product.name}</h3>
+                    <p>{line.product.weightLabel} · {line.product.purity}</p>
+                  </div>
+                  <dl>
+                    <div>
+                      <dt>Qty</dt>
+                      <dd>{line.quantity}</dd>
+                    </div>
+                    <div>
+                      <dt>Unit Price</dt>
+                      <dd>{formatAUD(line.lockedPrice)}</dd>
+                    </div>
+                    <div>
+                      <dt>Line Total</dt>
+                      <dd>{formatAUD(line.lineTotal)}</dd>
+                    </div>
+                  </dl>
+                </article>
+              ))}
+            </div>
+          </div>
+
+          <div className="panel tracking-summary-panel">
+            <div className="order-total-callout">
+              <span>Order Total</span>
+              <strong>{formatAUD(orderTotal)}</strong>
+              <small>{order.status}</small>
+            </div>
+            <div className="tracking-summary-grid">
+              {summaryItems.map(([label, value]) => (
+                <Info key={label as string} label={label as string} value={value} />
+              ))}
+              <div className="info gold-reference-info">
+                <span>Gold Spot Reference at Purchase</span>
+                <strong>{`AUD ${formatAUD(order.marketReferenceAudPerOz)} / oz`}</strong>
+                <small>Market reference captured when the order was placed.</small>
+              </div>
+            </div>
+          </div>
         </div>
-        <PlaceholderImage src="/images/orders/order-success.jpg" />
+      </div>
+
+      <div className="panel order-activity-panel">
+        <div className="panel-head">
+          <div>
+            <span className="eyebrow">Order activity</span>
+            <h2>Known updates</h2>
+          </div>
+        </div>
+        <ol className="order-activity-list">
+          {order.activity.map((event) => (
+            <li key={`${event.date}-${event.title}`}>
+              <span>{event.date}</span>
+              <div>
+                <strong>{event.title}</strong>
+                <p>{event.detail}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
       </div>
     </section>
   );
