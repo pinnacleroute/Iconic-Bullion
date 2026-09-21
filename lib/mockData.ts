@@ -361,7 +361,7 @@ export const products: BullionProduct[] = [
 
 export const serialRegistry = {
   "IB-10G-000219": {
-    product: "Iconic Bullion Gold Bar",
+    product: "Iconic Bullion 10g Minted Gold Bar",
     weight: "10g",
     purity: "999.9 Fine Gold",
     serial: "IB-10G-000219",

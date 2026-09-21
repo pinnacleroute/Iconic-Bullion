@@ -43,6 +43,7 @@ import {
   getGoldPricePerGram,
   TROY_OUNCE_GRAMS
 } from "@/lib/pricing";
+import { normalizeSerial, serialVerificationService, type SerialVerificationResult } from "@/lib/serialVerification";
 
 type VerificationState = "logged-out" | "unverified" | "pending" | "approved" | "declined";
 type AccountType = "individual" | "company";
@@ -257,6 +258,57 @@ function PrimaryButton({
     <button className={className} onClick={onClick} disabled={disabled} type={type}>
       {children}
     </button>
+  );
+}
+
+type EmptyStateAction = {
+  label: string;
+  href?: string;
+  onClick?: () => void;
+  variant?: "primary" | "secondary" | "ghost";
+};
+
+function EmptyState({
+  title,
+  description,
+  image = "/images/system/empty-results.webp",
+  imageAlt = "Iconic Bullion gold bar in a minimal empty catalogue setting",
+  primaryAction,
+  secondaryAction,
+  variant = "catalogue",
+  compact = false,
+  showImage = true
+}: {
+  title: string;
+  description: string;
+  image?: string;
+  imageAlt?: string;
+  primaryAction?: EmptyStateAction;
+  secondaryAction?: EmptyStateAction;
+  variant?: "catalogue" | "search" | "compact";
+  compact?: boolean;
+  showImage?: boolean;
+}) {
+  const renderAction = (action: EmptyStateAction) => (
+    <PrimaryButton key={action.label} href={action.href} onClick={action.onClick} variant={action.variant}>
+      {action.label}
+    </PrimaryButton>
+  );
+
+  return (
+    <section className={cx("empty-state", `empty-state-${variant}`, compact && "compact")}>
+      {showImage && <OptimisedImage src={image} alt={imageAlt} className="empty-state-image" sizes={compact ? "(max-width: 900px) 84vw, 360px" : "(max-width: 900px) 84vw, 560px"} />}
+      <div className="empty-state-copy">
+        <h2>{title}</h2>
+        <p>{description}</p>
+        {(primaryAction || secondaryAction) && (
+          <div className="split-actions">
+            {primaryAction && renderAction(primaryAction)}
+            {secondaryAction && renderAction(secondaryAction)}
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -483,7 +535,7 @@ function ProductCard({
         </PrimaryButton>
         {!showcase && (
           <PrimaryButton onClick={() => onAdd(product)} disabled={disabled} variant={verification === "approved" ? "primary" : "secondary"}>
-            {verification === "approved" ? "Add" : "Verify"}
+            {disabled ? product.availability : verification === "approved" ? "Add to Cart" : "Verify"}
           </PrimaryButton>
         )}
       </div>
@@ -509,8 +561,14 @@ function VerificationGate({ onApprove }: { onApprove: () => void }) {
   );
 }
 
-function CertificatePanel({ printable = false }: { printable?: boolean }) {
+function CertificatePanel({ printable = false, autoPrint = false }: { printable?: boolean; autoPrint?: boolean }) {
   const cert = serialRegistry["IB-10G-000219"];
+  useEffect(() => {
+    if (!autoPrint) return;
+    const printTimer = window.setTimeout(() => window.print(), 250);
+    return () => window.clearTimeout(printTimer);
+  }, [autoPrint]);
+
   return (
     <section className={cx("certificate", printable && "printable")}>
       <div className="cert-head">
@@ -535,9 +593,6 @@ function CertificatePanel({ printable = false }: { printable?: boolean }) {
       <div className="split-actions no-print">
         <button className="btn primary" onClick={() => window.print()}>
           <Printer size={17} /> Print Certificate
-        </button>
-        <button className="btn secondary">
-          <Download size={17} /> Download PDF
         </button>
       </div>
     </section>
@@ -641,8 +696,14 @@ export function IconicPrototype({ route }: { route: string }) {
   const [weight, setWeight] = useState("All");
   const [availability, setAvailability] = useState("All");
   const [sort, setSort] = useState("Featured");
-  const [serial, setSerial] = useState("IB-10G-000219");
+  const [serial, setSerial] = useState("");
   const [secondsLeft, setSecondsLeft] = useState(600);
+  const serialParam = searchParams.get("serial");
+
+  useEffect(() => {
+    if (normalRoute !== "serial-verification") return;
+    if (serialParam) setSerial(normalizeSerial(serialParam));
+  }, [normalRoute, serialParam]);
 
   useEffect(() => {
     const priceInterval = window.setInterval(() => {
@@ -821,7 +882,7 @@ export function IconicPrototype({ route }: { route: string }) {
       case "certificate":
         return (
           <AccountShell active="certificate" className="certificate-account">
-            <CertificatePanel printable />
+            <CertificatePanel printable autoPrint={searchParams.get("print") === "1"} />
           </AccountShell>
         );
       case "wholesale":
@@ -875,17 +936,11 @@ export function IconicPrototype({ route }: { route: string }) {
 
 function Home({ onAdd, verification }: { onAdd: (product: BullionProduct) => void; verification: VerificationState }) {
   const featuredProducts = products.filter((p) => p.featured).slice(0, 4);
-  const featuredPrices: Record<string, string> = {
-    "iconic-1g": "AUD $385.00",
-    "iconic-5g": "AUD $1,185.00",
-    "iconic-10g": "AUD $2,340.00",
-    "premium-1g": "AUD $385.00"
-  };
   const sizeLabels = ["1g", "2.5g", "5g", "10g", "20g", "1oz", "50g", "100g", "250g", "500g", "1kg"];
   const pricingSteps = [
-    ["Live Gold Market", "Spot price, refreshed every 5 min"],
-    ["Product Margin", "Format, weight and premium applied"],
-    ["Your Live Price", "Transparent, in real time"]
+    ["Live Gold Market Price", "Spot reference refreshed every 5 minutes."],
+    ["Product-Specific Margin", "Format, weight and premium applied."],
+    ["Live Product Price", "Transparent pricing before checkout."]
   ];
   const trustItems = [
     ["Identity verification before trading", "Customer verification before bullion transactions."],
@@ -912,14 +967,14 @@ function Home({ onAdd, verification }: { onAdd: (product: BullionProduct) => voi
           </h1>
           <p>Buy investment-grade gold bullion with transparent live pricing, secure verification and flexible pickup or insured delivery.</p>
           <div className="split-actions">
-            <PrimaryButton href="bullion">Shop Bullion</PrimaryButton>
+            <PrimaryButton href="bullion">Browse Bullion</PrimaryButton>
             <PrimaryButton href="market" variant="secondary">
               View Live Gold Price
             </PrimaryButton>
           </div>
           <div className="trust-line">
-            <span>Live pricing</span>
-            <span>Secure verification</span>
+            <span>Live market pricing</span>
+            <span>Authenticity checks</span>
             <span>Bank transfer</span>
           </div>
         </div>
@@ -962,7 +1017,7 @@ function Home({ onAdd, verification }: { onAdd: (product: BullionProduct) => voi
         <SectionHead title="Featured Bullion" subtitle="Live-priced gold bars." action={<Link href="/bullion">View all bullion</Link>} />
         <div className="product-grid figma-products">
           {featuredProducts.map((product) => (
-            <ProductCard key={product.id} product={product} onAdd={onAdd} verification={verification} showcase displayPrice={featuredPrices[product.id]} />
+            <ProductCard key={product.id} product={product} onAdd={onAdd} verification={verification} showcase />
           ))}
         </div>
       </section>
@@ -999,6 +1054,7 @@ function Home({ onAdd, verification }: { onAdd: (product: BullionProduct) => voi
           <strong>
             <Clock size={15} /> PRICE LOCKED · 10:00
           </strong>
+          <PrimaryButton href="bullion">Browse Bullion</PrimaryButton>
           <PrimaryButton href="market" variant="secondary">
             View Live Gold Price
           </PrimaryButton>
@@ -1011,16 +1067,16 @@ function Home({ onAdd, verification }: { onAdd: (product: BullionProduct) => voi
           <h2>Bullion you can verify.</h2>
           <p>Selected Iconic Bullion bars feature unique serial identification and certificate-ready authenticity verification.</p>
           <ul className="check-list">
-            {["999.9 Fine Gold", "Unique serial identification", "Barcode / serial verification", "Printable authenticity certificate"].map((item) => (
+            {["Iconic-branded bullion", "Unique serial identification", "Authenticity verification", "Printable authenticity certificate"].map((item) => (
               <li key={item}>
                 <Check size={14} /> {item}
               </li>
             ))}
           </ul>
           <div className="split-actions">
-            <PrimaryButton href="bullion?brand=Iconic%20Bullion">Explore Iconic Bullion</PrimaryButton>
-            <PrimaryButton href="serial-verification" variant="secondary">
-              Verify Serial
+            <PrimaryButton href="serial-verification">Verify a Serial</PrimaryButton>
+            <PrimaryButton href="bullion?brand=Iconic%20Bullion" variant="secondary">
+              Explore Iconic Bullion
             </PrimaryButton>
           </div>
         </div>
@@ -1040,6 +1096,11 @@ function Home({ onAdd, verification }: { onAdd: (product: BullionProduct) => voi
             ))}
           </div>
         </div>
+        <div className="certificate-kicker">
+          <span className="eyebrow gold">Authenticity Certificate</span>
+          <h3>Verification records designed for confidence.</h3>
+          <p>Eligible Iconic Bullion bars can display serial details and printable authenticity records.</p>
+        </div>
         <OptimisedImage src="/images/home/verification-trust.webp" alt="Gold bullion bar displayed with authenticity certificate" className="trust-image" sizes="(max-width: 900px) 100vw, 90vw" />
       </section>
       <section className="delivery-section">
@@ -1051,13 +1112,13 @@ function Home({ onAdd, verification }: { onAdd: (product: BullionProduct) => voi
               <PackageCheck />
               <h3>Store Pickup</h3>
               <p>Collect your bullion directly after payment confirmation.</p>
-              <strong>Free</strong>
+              <strong>Available at checkout</strong>
             </article>
             <article>
               <ShieldCheck />
               <h3>Insured Delivery</h3>
               <p>Secure delivery options for eligible orders, with discreet packaging and insurance represented in checkout.</p>
-              <strong>Calculated after shipping configuration</strong>
+              <strong>Calculated at checkout</strong>
             </article>
           </div>
         </div>
@@ -1068,7 +1129,7 @@ function Home({ onAdd, verification }: { onAdd: (product: BullionProduct) => voi
           <h2>Bullion supply for professional buyers.</h2>
           <p>Speak with Iconic Bullion about wholesale availability, trade quantities and business requirements.</p>
           <PrimaryButton href="wholesale" variant="secondary">
-            Wholesale Enquiry
+            Enquire About Wholesale
           </PrimaryButton>
         </div>
         <OptimisedImage src="/images/home/wholesale.webp" alt="Multiple gold bullion bars prepared for wholesale supply" className="wholesale-image" sizes="(max-width: 900px) 100vw, 48vw" />
@@ -1097,7 +1158,7 @@ function NewsletterStrip() {
     <section className="newsletter-strip">
       <div>
         <h2>Stay informed on gold.</h2>
-        <p>Market updates, new products and bullion news from Iconic Bullion.</p>
+        <p>Receive bullion market updates, product availability and Iconic Bullion news.</p>
       </div>
       <form
         onSubmit={(event) => {
@@ -1188,6 +1249,8 @@ function Listing({
   verification: VerificationState;
 }) {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [expandedFilters, setExpandedFilters] = useState<Record<string, boolean>>({});
   const brandOptions = ["All", "Iconic Bullion", "Aurelia Reserve", "PAMP Suisse", "Emirates Gold", "Generic", "ABC / Placeholder Brand"];
   const weightOptions = ["All", "1g", "2.5g", "5g", "10g", "20g", "1oz / 31.1g", "50g", "100g", "250g", "500g", "1kg"];
   const selectedFilters = [brand, productType, weight, availability].filter((option) => option !== "All");
@@ -1198,28 +1261,99 @@ function Listing({
     setWeight("All");
     setAvailability("All");
   };
+  const clearSelectedFilters = () => {
+    setBrand("All");
+    setProductType("All");
+    setWeight("All");
+    setAvailability("All");
+  };
+  const hasQuery = Boolean(query.trim());
+  const hasFilters = selectedFilters.length > 0;
+  const emptyState = hasQuery && !hasFilters
+    ? {
+        title: "No bullion found",
+        description: `We couldn't find bullion matching "${query.trim()}".`,
+        primaryAction: { label: "Clear Search", onClick: () => setQuery("") },
+        secondaryAction: { label: "Browse All Bullion", onClick: resetFilters, variant: "secondary" as const }
+      }
+    : hasQuery && hasFilters
+      ? {
+          title: "No matching bullion",
+          description: "No products match your search and selected filters.",
+          primaryAction: { label: "Clear All", onClick: resetFilters }
+        }
+      : {
+          title: availability !== "All" ? "No bullion available" : weight !== "All" ? "No matching weights" : brand !== "All" ? "No matching products" : "No matching bullion",
+          description:
+            availability !== "All"
+              ? "No products currently match the selected availability filters."
+              : weight !== "All"
+                ? "No bullion products match the selected weight range."
+                : brand !== "All"
+                  ? "No products from this brand match your current filters."
+                  : "No bullion products match your selected filters.",
+          primaryAction: { label: weight !== "All" && selectedFilters.length === 1 ? "Clear Weight Filter" : "Reset Filters", onClick: clearSelectedFilters }
+        };
   const FilterGroup = ({
     title,
     value,
     options,
-    onChange
+    onChange,
+    initialVisible = 5
   }: {
     title: string;
     value: string;
     options: string[];
     onChange: (value: string) => void;
-  }) => (
-    <div className="filter-group">
-      <span>{title}</span>
-      <div>
-        {options.map((option) => (
-          <label key={`${title}-${option}`} className="check-filter">
-            <input type="checkbox" checked={value === option} onChange={() => onChange(value === option ? "All" : option)} />
-            <span>{option}</span>
-          </label>
-        ))}
+    initialVisible?: number;
+  }) => {
+    const isExpanded = Boolean(expandedFilters[title]);
+    const visibleOptions = isExpanded ? options : options.slice(0, initialVisible);
+    const hiddenCount = Math.max(options.length - initialVisible, 0);
+
+    return (
+      <div className="filter-group">
+        <span>{title}</span>
+        <div>
+          {visibleOptions.map((option) => (
+            <label key={`${title}-${option}`} className="check-filter">
+              <input type="checkbox" checked={value === option} onChange={() => onChange(value === option ? "All" : option)} />
+              <span>{option}</span>
+            </label>
+          ))}
+          {hiddenCount > 0 && (
+            <button
+              className="filter-more"
+              type="button"
+              onClick={() => setExpandedFilters((current) => ({ ...current, [title]: !isExpanded }))}
+            >
+              {isExpanded ? "Show less" : `+ ${hiddenCount} more`}
+            </button>
+          )}
+        </div>
       </div>
-    </div>
+    );
+  };
+
+  const filterPanel = (
+    <>
+      <div className="filters-head">
+        <h2>
+          <Filter size={15} /> Filters
+          {selectedFilters.length > 0 && <span>{selectedFilters.length}</span>}
+        </h2>
+        <button type="button" onClick={resetFilters}>Clear</button>
+      </div>
+      <label className="filter-search">
+        <span className="sr-only">Search bullion</span>
+        <Search size={15} />
+        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search bullion" />
+      </label>
+      <FilterGroup title="Product Type" value={productType} options={["Minted Bars", "Cast Bars"]} onChange={setProductType} initialVisible={2} />
+      <FilterGroup title="Brand" value={brand} options={brandOptions.filter((option) => option !== "All")} onChange={setBrand} initialVisible={4} />
+      <FilterGroup title="Weight" value={weight} options={weightOptions.filter((option) => option !== "All")} onChange={setWeight} initialVisible={6} />
+      <FilterGroup title="Availability" value={availability} options={["In Stock", "Low Stock", "Out of Stock", "Coming Soon"]} onChange={setAvailability} initialVisible={4} />
+    </>
   );
 
   return (
@@ -1236,26 +1370,31 @@ function Listing({
       </div>
       <div className="catalogue">
         <aside className="filters">
-          <div className="filters-head">
-            <h2>
-              <Filter size={17} /> Filter
-            </h2>
-            <button type="button" onClick={resetFilters}>Clear all</button>
-          </div>
-          <label className="filter-search">
-            <Search size={16} />
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search bullion" />
-          </label>
-          <FilterGroup title="Product Type" value={productType} options={["Minted Bars", "Cast Bars"]} onChange={setProductType} />
-          <FilterGroup title="Manufacturer" value={brand} options={brandOptions.filter((option) => option !== "All")} onChange={setBrand} />
-          <FilterGroup title="Weight" value={weight} options={weightOptions.filter((option) => option !== "All").slice(0, 8)} onChange={setWeight} />
-          <FilterGroup title="Availability" value={availability} options={["In Stock", "Low Stock", "Out of Stock", "Coming Soon"]} onChange={setAvailability} />
+          {filterPanel}
         </aside>
         <div className="catalogue-results">
+          <div className="mobile-catalogue-bar">
+            <button type="button" onClick={() => setMobileFiltersOpen(true)}>
+              <Filter size={15} /> Filters{selectedFilters.length > 0 ? ` (${selectedFilters.length})` : ""}
+            </button>
+            <label className="sort-menu mobile-sort-menu">
+              <span>Sort</span>
+              <div>
+                <select value={sort} onChange={(event) => setSort(event.target.value)} aria-label="Sort products">
+                  {["Featured", "Price Low to High", "Price High to Low", "Weight Low to High", "Weight High to Low"].map((option) => (
+                    <option key={option}>{option}</option>
+                  ))}
+                </select>
+                <ChevronDown size={15} aria-hidden="true" />
+              </div>
+            </label>
+          </div>
           <div className="catalogue-toolbar">
             <div>
-              <span>{products.length} products</span>
-              <strong>{selectedFilters.length ? selectedFilters.join(" · ") : "All bullion"}</strong>
+              <span>
+                {products.length} products
+                <strong>{selectedFilters.length ? selectedFilters.join(" · ") : "All bullion"}</strong>
+              </span>
             </div>
             <div className="listing-controls">
               <div className="view-toggle" aria-label="Product view">
@@ -1268,17 +1407,25 @@ function Listing({
               </div>
               <label className="sort-menu">
                 <span>Sort by</span>
-                <select value={sort} onChange={(event) => setSort(event.target.value)} aria-label="Sort products">
-                  {["Featured", "Price Low to High", "Price High to Low", "Weight Low to High", "Weight High to Low"].map((option) => (
-                    <option key={option}>{option}</option>
-                  ))}
-                </select>
+                <div>
+                  <select value={sort} onChange={(event) => setSort(event.target.value)} aria-label="Sort products">
+                    {["Featured", "Price Low to High", "Price High to Low", "Weight Low to High", "Weight High to Low"].map((option) => (
+                      <option key={option}>{option}</option>
+                    ))}
+                  </select>
+                  <ChevronDown size={15} aria-hidden="true" />
+                </div>
               </label>
             </div>
           </div>
           {(query || selectedFilters.length > 0) && (
             <div className="active-filter-row">
-              {query && <button type="button" onClick={() => setQuery("")}>Search: {query} ×</button>}
+              {query && (
+                <button type="button" onClick={() => setQuery("")}>
+                  Search: {query}
+                  <X size={13} />
+                </button>
+              )}
               {selectedFilters.map((filter) => (
                 <button
                   type="button"
@@ -1290,7 +1437,8 @@ function Listing({
                     if (filter === availability) setAvailability("All");
                   }}
                 >
-                  {filter} ×
+                  {filter}
+                  <X size={13} />
                 </button>
               ))}
             </div>
@@ -1302,10 +1450,33 @@ function Listing({
               ))}
             </div>
           ) : (
-            <StatePage kind="filter-empty" embedded />
+            <EmptyState
+              title={emptyState.title}
+              description={emptyState.description}
+              primaryAction={emptyState.primaryAction}
+              secondaryAction={emptyState.secondaryAction}
+              compact
+            />
           )}
         </div>
       </div>
+      {mobileFiltersOpen && (
+        <div className="mobile-filter-overlay" role="dialog" aria-modal="true" aria-label="Catalogue filters">
+          <button className="mobile-filter-backdrop" type="button" aria-label="Close filters" onClick={() => setMobileFiltersOpen(false)} />
+          <div className="mobile-filter-drawer">
+            <div className="mobile-filter-title">
+              <strong>Refine results</strong>
+              <button type="button" onClick={() => setMobileFiltersOpen(false)} aria-label="Close filters">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="mobile-filter-scroll">{filterPanel}</div>
+            <button className="btn primary mobile-filter-apply" type="button" onClick={() => setMobileFiltersOpen(false)}>
+              Show {products.length} Products
+            </button>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -3174,41 +3345,176 @@ function VerificationStatusPage({ tone, setVerification }: { tone: "pending" | "
 }
 
 function SerialPage({ serial, setSerial }: { serial: string; setSerial: (serial: string) => void }) {
-  const record = serialRegistry[serial as keyof typeof serialRegistry];
+  const router = useRouter();
+  const [result, setResult] = useState<SerialVerificationResult | null>(null);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const verifiedRecord = result?.status === "verified" ? result.record : null;
+  const fieldError = result?.status === "invalid" ? result.message : undefined;
+  const details = verifiedRecord
+    ? [
+        ["Product", verifiedRecord.product],
+        ["Weight", verifiedRecord.weight],
+        ["Purity", verifiedRecord.purity],
+        ["Serial", verifiedRecord.serial],
+        ["Status", verifiedRecord.status]
+      ]
+    : [];
+
+  const verifySerial = (value = serial) => {
+    const normalized = normalizeSerial(value);
+    const nextResult = serialVerificationService.verify(normalized);
+    setSerial(normalized);
+
+    if (nextResult.status === "invalid") {
+      setResult(nextResult);
+      return;
+    }
+
+    setIsVerifying(true);
+    setResult(null);
+    window.setTimeout(() => {
+      setResult(nextResult);
+      setIsVerifying(false);
+    }, 420);
+  };
+
+  const resetVerification = () => {
+    setResult(null);
+    setSerial("");
+  };
+
   return (
-    <section className="page-shell">
-      <SectionHead eyebrow="Serial Verification" title="Verify Iconic-branded bullion" />
-      <div className="split-section">
-        <PlaceholderImage src="/images/serial/barcode-scan.jpg" />
-        <div className="form-card">
-          <label>
-            Enter serial number
-            <input value={serial} onChange={(event) => setSerial(event.target.value)} />
-          </label>
-          <PrimaryButton variant="secondary" onClick={() => setSerial("IB-10G-000219")}>
-            Use Valid Demo Serial
-          </PrimaryButton>
-          {record ? (
-            <div className="verified-result">
-              <BadgeCheck size={30} />
-              <h2>Authenticity Verified</h2>
-              <Info label="Product" value={record.product} />
-              <Info label="Weight" value={record.weight} />
-              <Info label="Purity" value={record.purity} />
-              <Info label="Serial" value={record.serial} />
-              <Info label="Status" value={record.status} />
+    <section className="page-shell serial-verification-page">
+      <SectionHead
+        eyebrow="Serial Verification"
+        title="Verify Iconic-branded bullion"
+        subtitle="Enter the serial number on your Iconic Bullion product to confirm its authenticity and view the associated certificate."
+      />
+      <div className="serial-verification-layout">
+        <div className="serial-media-panel">
+          <OptimisedImage
+            src="/images/serial/serial-verification.webp"
+            alt="Iconic Bullion gold bar with serial verification and barcode scanning"
+            className="serial-verification-image"
+            sizes="(max-width: 900px) 100vw, 46vw"
+          />
+          <div className="serial-trust-copy">
+            <h2>Verify your Iconic Bullion</h2>
+            <p>Each eligible Iconic-branded bullion product can be checked against its recorded serial details.</p>
+            <div className="serial-trust-points">
+              {["Iconic-branded bullion only", "Serial matched against Iconic records", "Certificate available for verified products"].map((item) => (
+                <span key={item}>
+                  <ShieldCheck size={15} />
+                  {item}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="serial-check-panel" aria-live="polite" aria-busy={isVerifying}>
+          <form
+            className="serial-entry-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              verifySerial();
+            }}
+          >
+            <label htmlFor="serial-number">Enter serial number</label>
+            <div className={cx("serial-input-row", fieldError && "has-error")}>
+              <input
+                id="serial-number"
+                value={serial}
+                onChange={(event) => {
+                  setSerial(event.target.value.toUpperCase());
+                  if (result?.status === "invalid") setResult(null);
+                }}
+                placeholder="IB-10G-000219"
+                autoComplete="off"
+                aria-invalid={Boolean(fieldError)}
+                aria-describedby={fieldError ? "serial-error serial-helper" : "serial-helper"}
+              />
+              <button className="btn primary" type="submit" disabled={isVerifying}>
+                {isVerifying ? "Verifying..." : "Verify Serial"}
+              </button>
+            </div>
+            {fieldError && <p id="serial-error" className="field-error">{fieldError}</p>}
+            <p id="serial-helper" className="serial-helper">Serial verification is available for eligible Iconic Bullion products.</p>
+          </form>
+
+          {!result && !isVerifying && (
+            <div className="serial-empty-state">
+              <ShieldCheck size={18} />
+              <p>Enter a serial number to check the recorded authenticity details for eligible Iconic-branded bullion.</p>
+            </div>
+          )}
+
+          {isVerifying && (
+            <div className="serial-loading-state" role="status">
+              <Clock size={18} />
+              <p>Checking serial...</p>
+            </div>
+          )}
+
+          {verifiedRecord && (
+            <div className="verified-result" role="status">
+              <div className="verified-result-head">
+                <span>
+                  <BadgeCheck size={15} />
+                  Verified Genuine
+                </span>
+                <h2>Authenticity Verified</h2>
+              </div>
+              <div className="verified-product-summary">
+                <OptimisedImage src="/images/products/iconic-10g.webp" alt="Iconic Bullion 10g minted gold bar" className="verified-product-thumb" sizes="96px" />
+                <p>This serial matches an eligible Iconic Bullion product record.</p>
+              </div>
+              <dl className="verification-details">
+                {details.map(([label, value]) => (
+                  <div key={label}>
+                    <dt>{label}</dt>
+                    <dd>{value}</dd>
+                  </div>
+                ))}
+              </dl>
+              <div className="certificate-preview">
+                <OptimisedImage src="/images/products/iconic-10g-certificate.webp" alt="Iconic Bullion authenticity certificate" sizes="120px" />
+                <p>Associated authenticity certificate is available for this verified serial.</p>
+              </div>
               <div className="split-actions">
                 <PrimaryButton href="certificate">View Certificate</PrimaryButton>
-                <button className="btn secondary" onClick={() => window.print()}>
-                  Print Certificate
+                <button className="btn secondary" type="button" onClick={() => router.push(`${href("certificate")}?print=1`)}>
+                  <Printer size={16} /> Print Certificate
                 </button>
               </div>
             </div>
-          ) : (
-            <div className="error-box">
-              <AlertTriangle />
-              <strong>Serial not found</strong>
-              <p>Check the serial number and try again. Public lookup is only for Iconic-branded bullion.</p>
+          )}
+
+          {result?.status === "not_found" && (
+            <div className="serial-message-state">
+              <AlertTriangle size={18} />
+              <div>
+                <strong>We couldn't verify this serial number.</strong>
+                <p>Check the serial number and try again. If the number is correct, contact Iconic Bullion for assistance.</p>
+              </div>
+              <div className="split-actions">
+                <button className="btn primary" type="button" onClick={resetVerification}>
+                  Try Again
+                </button>
+                <PrimaryButton href="contact" variant="secondary">Make an Enquiry</PrimaryButton>
+              </div>
+            </div>
+          )}
+
+          {result?.status === "unavailable" && (
+            <div className="serial-message-state">
+              <Clock size={18} />
+              <div>
+                <strong>Serial verification is temporarily unavailable.</strong>
+                <p>Please try again shortly.</p>
+              </div>
+              <button className="btn secondary" type="button" onClick={() => verifySerial()}>
+                Try Again
+              </button>
             </div>
           )}
         </div>
@@ -3676,16 +3982,47 @@ function SearchPage({
           ))}
         </div>
       ) : (
-        <StatePage kind="no-results" embedded />
+        <EmptyState
+          title="No bullion found"
+          description={query.trim() ? `We couldn't find bullion matching "${query.trim()}".` : "We couldn't find bullion matching your search."}
+          primaryAction={{ label: "Clear Search", onClick: () => setQuery("") }}
+          secondaryAction={{ label: "Browse All Bullion", href: "bullion", variant: "secondary" }}
+          variant="search"
+        />
       )}
     </section>
   );
 }
 
 function StatePage({ kind, embedded }: { kind: string; embedded?: boolean }) {
+  if (kind === "no-results") {
+    return (
+      <section className={embedded ? "state-card embedded" : "page-shell narrow"}>
+        <EmptyState
+          title="No bullion found"
+          description="We couldn't find bullion matching your search."
+          primaryAction={{ label: "Browse All Bullion", href: "bullion" }}
+          variant="search"
+          compact={embedded}
+        />
+      </section>
+    );
+  }
+
+  if (kind === "filter-empty") {
+    return (
+      <section className={embedded ? "state-card embedded" : "page-shell narrow"}>
+        <EmptyState
+          title="No matching bullion"
+          description="No bullion products match your selected filters."
+          primaryAction={{ label: "Browse All Bullion", href: "bullion" }}
+          compact={embedded}
+        />
+      </section>
+    );
+  }
+
   const copy: Record<string, [string, string, string, string?]> = {
-    "no-results": ["No results", "No bullion products match that search.", "/images/system/no-results.jpg", "Browse All Bullion"],
-    "filter-empty": ["No matching bullion", "No bullion products match your selected filters.", "/images/system/no-results.jpg", "Reset Filters"],
     "empty-cart": ["Your cart is empty", "Add verified bullion products to see the 10-minute price lock.", "/images/cart/price-lock.jpg", "Browse Bullion"],
     "coming-soon": ["Coming Soon", "This premium bullion product state is prepared for future availability.", "/images/system/coming-soon.jpg", "Browse Bullion"],
     "404": ["Page not found", "The page you requested could not be found.", "/images/system/404.jpg", "Return Home"],
