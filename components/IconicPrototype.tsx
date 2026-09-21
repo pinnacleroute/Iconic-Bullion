@@ -2695,29 +2695,51 @@ function CheckoutPage({
 }
 
 function OrderSuccessPage({ orderPlaced, totals }: { orderPlaced: boolean; totals: { total: number } }) {
+  const steps = [
+    ["1", "Invoice generated", "Your invoice is ready with the locked order total."],
+    ["2", "Complete bank transfer", "Use the invoice details to complete payment externally."],
+    ["3", "Payment reviewed", "Iconic Bullion confirms payment manually."],
+    ["4", "Order prepared", "Your order is prepared for pickup or insured delivery."]
+  ];
+
   return (
-    <section className="page-shell narrow">
-      <div className="success-panel">
-        <Check size={44} />
-        <span className="eyebrow">Order successfully placed</span>
-        <h1>Pending for Payment</h1>
-        <div className="spec-grid">
-          <Info label="Order #" value={orderPlaced ? "IB-10472" : "IB-DEMO"} />
-          <Info label="Invoice #" value="INV-2026-0188" />
-          <Info label="Total" value={formatAUD(totals.total || 2489.62)} />
-          <Info label="Status" value="Pending for Payment" />
+    <section className="page-shell order-success-page">
+      <div className="success-panel order-success-panel">
+        <div className="order-success-main">
+          <span className="success-badge" aria-hidden="true">
+            <Check size={34} />
+          </span>
+          <span className="eyebrow">Order successfully placed</span>
+          <h1>Pending for Payment</h1>
+          <p>We have generated your invoice and reserved the order details. Complete the bank transfer externally, then our team will confirm payment before preparing fulfilment.</p>
+          <div className="spec-grid order-summary-grid">
+            <Info label="Order #" value={orderPlaced ? "IB-10472" : "IB-DEMO"} />
+            <Info label="Invoice #" value="INV-2026-0188" />
+            <Info label="Total" value={formatAUD(totals.total || 2489.62)} />
+            <Info label="Status" value="Pending for Payment" />
+          </div>
+          <div className="split-actions">
+            <PrimaryButton href="invoice">View Invoice</PrimaryButton>
+            <PrimaryButton href="order-detail" variant="secondary">
+              View Order
+            </PrimaryButton>
+          </div>
         </div>
-        <ol className="next-steps">
-          <li>Invoice generated</li>
-          <li>Complete bank transfer externally</li>
-          <li>Iconic confirms payment manually</li>
-          <li>Order prepared for pickup or delivery</li>
-        </ol>
-        <div className="split-actions">
-          <PrimaryButton href="invoice">View Invoice</PrimaryButton>
-          <PrimaryButton href="order-detail" variant="secondary">
-            View Order
-          </PrimaryButton>
+        <div className="payment-next-panel">
+          <span className="eyebrow gold">Next Steps</span>
+          <h2>Complete payment by bank transfer.</h2>
+          <ol className="payment-timeline">
+            {steps.map(([index, title, body]) => (
+              <li key={title}>
+                <span>{index}</span>
+                <div>
+                  <strong>{title}</strong>
+                  <p>{body}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+          <p className="payment-note">Order fulfilment begins once payment has been confirmed against the invoice reference.</p>
         </div>
       </div>
     </section>
